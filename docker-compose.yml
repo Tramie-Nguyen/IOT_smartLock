@@ -9,4 +9,17 @@ services:
       - ./data:/data
     environment:
       - TZ=Asia/Ho_Chi_Minh
-    restart: unless-stopped
+    depends_on:
+      - mosquitto
+    restart: always
+
+  mosquitto:
+    image: eclipse-mosquitto
+    container_name: mqtt-broker
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+      - ./mosquitto/data:/mosquitto/data
+      - ./mosquitto/log:/mosquitto/log
+    restart: always

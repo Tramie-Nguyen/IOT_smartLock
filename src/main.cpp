@@ -1,91 +1,25 @@
 #include <Arduino.h>
 
-#include <WiFi.h>
-#include <PubSubClient.h>
-
-#include <ESP32Servo.h>
 #include <LiquidCrystal_I2C.h>
 #include <Keypad.h>
-#include <Password.h>
+#include <ESP32Servo.h>
 
 #define servoPin 33
 Servo servo;
 
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 
-const char* ssid = "Wokwi-GUEST";
-const char* wifiPassword = "";
-
-// MQTT server
-const char* mqttServer = "broker.hivemq.com";
-int port = 1883;
-
-WiFiClient wifiClient;
-PubSubClient mqttClient(wifiClient);
-
-// ===============================
-// KẾT NỐI WIFI
-// ===============================
-void wifiConnect() {
-  Serial.print("Connecting to WiFi");
-  WiFi.begin(ssid, wifiPassword);
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-  }
-  Serial.println(" Connected!");
-}
-
-// ===============================
-// KẾT NỐI MQTT
-// ===============================
-void mqttConnect() {
-  while (!mqttClient.connected()) {
-    Serial.println("Attempting MQTT connection...");
-    String clientId = "ESP32Client-" + String(random(0xffff), HEX);
-
-    if (mqttClient.connect(clientId.c_str())) {
-      Serial.println("MQTT connected");
-
-      // Subscribe topic
-      mqttClient.subscribe("/MSSV/led");
-    } else {
-      Serial.print("Failed, rc=");
-      Serial.print(mqttClient.state());
-      Serial.println(" try again in 5 seconds");
-      delay(5000);
-    }
-  }
-}
-
-// ===============================
-// CALLBACK – khi có dữ liệu gửi về
-// ===============================
-void callback(char* topic, byte* message, unsigned int length) {
-  Serial.print("Topic: ");
-  Serial.println(topic);
-
-  String msg = "";
-  for (int i = 0; i < length; i++) {
-    msg += (char)message[i];
-  }
-  Serial.print("Message: ");
-  Serial.println(msg);
-
-  // Xử lý dữ liệu MQTT nhận về
-  //...
-}
-
 int red = 16;
 int wrongPw = 0;
 int blue = 17;
 int green = 23;
-bool isDoorLocked = false; // khi sai mật khẩu 5 lần liên tục
+int relay = 27;
+bool isDoorLocked = false;
 
 // các biến quản lý chức năng đổi mật khẩu
 unsigned long keyPressStart = 0;
 unsigned long holdTimeRequired = 3000;
-bool isChangingPass = false;
+bool isHoldingHash = false;
 
 // quản lý keypad
 const byte ROWS = 4;
@@ -100,235 +34,231 @@ char keys[ROWS][COLS] =
 };
 
 byte rowPins[ROWS] = {5, 18, 19, 25};
-byte colPins[COLS] = {26, 34, 35, 32};
+byte colPins[COLS] = {26, 4, 2, 32};
 String initualPW = "123456";
-Password password = Password((char*)initualPW.c_str());
+String currentInput = "";
+bool isEnteringDoorPassword = false;
 
 Keypad keypad = Keypad(makeKeymap(keys), rowPins, colPins, ROWS, COLS);
 
-//PROTOTYPE
+// PROTOTYPE
 String readPasswordFromKeypad();
-void handleChangePw();
-void handleDoorInput(char key);
+void handlePasswordCheck(String password);
 void lockDoor();
 void unlockFromApp();
+void handleChangePw();
 void changeFail(String first, String second);
 void changeSuccess();
 void showHomeScreen();
+void printAndOpenDoor();
 
 
 void setup() {
-  wifiConnect();
-
-  mqttClient.setServer(mqttServer, port);
-  mqttClient.setCallback(callback);
-  mqttClient.setKeepAlive(90);
-
+  Serial.begin(115200);
+  Serial.println("--- KHOI DONG HE THONG ---");
   pinMode(red, OUTPUT);
   pinMode(blue, OUTPUT);
   pinMode(green, OUTPUT);
+  pinMode(relay, OUTPUT);
 
   servo.attach(servoPin);
+
   lcd.init();
   lcd.backlight();
   showHomeScreen();
 }
 
 void loop() {
-  if (WiFi.status() != WL_CONNECTED) {
-    wifiConnect();
-  }
-  if (!mqttClient.connected()) {
-    mqttConnect();
-  }
-
-  mqttClient.loop();
-
-  // Publish thử dữ liệu
-  char buffer[10];
-  sprintf(buffer, "%d", random(0, 100));
-  mqttClient.publish("/MSSV/temperature", buffer);
-
-  delay(3000);
-  
   char key = keypad.getKey();
-  // nếu cửa khóa do nhập sai nhiều lần
+  KeyState state = keypad.getState();   // <<=== LẤY TRẠNG THÁI PHÍM
+
+  // nếu cửa khóa
   if (isDoorLocked){
-    lockDoor();
+    lcd.setCursor(0, 0);
+    lcd.print("DA KHOA HE THONG");
+    lcd.setCursor(0, 1);
+    lcd.print("MO BANG APP");
     return;
   }
 
-  // bắt đầu giữ #
-  if (key == '#' && !isChangingPass) {
-    isChangingPass = true;
+  // 1. Khi bắt đầu bấm #
+  if (key == '#' && state == PRESSED && !isHoldingHash && !isEnteringDoorPassword) {
+    isHoldingHash = true;
     keyPressStart = millis();
+    Serial.println("Bat dau GIU #");
   }
 
-  // nếu nhả phím trước khi đủ thời gian -> hủy chế độ hold
-  if (key == NO_KEY && isChangingPass) {
-    // giữ trạng thái chờ, nhưng ta sẽ bỏ cờ nếu chưa đủ thời gian
-    if (millis() - keyPressStart < holdTimeRequired) {
-      isChangingPass = false;
+  // 2. Khi đang giữ phím #
+  if (isHoldingHash && state == HOLD) {
+    unsigned long holdDuration = millis() - keyPressStart;
+
+    //kích hoạt đổi mật khẩu nếu đủ thời gian quy định
+    if (holdDuration >= holdTimeRequired) {
+      isHoldingHash = false;
+      Serial.println("BAT DAU QUA TRINH DOI MAT KHAU");
+      handleChangePw();
+      return;
     }
   }
 
-  // giữ đủ thời gian -> kích hoạt mode đổi mật khẩu
-  if (isChangingPass && (millis() - keyPressStart >= holdTimeRequired)) {
-    isChangingPass = false;
-    handleChangePw();
+  // 3. Khi nhả phím #
+  if (isHoldingHash && state == RELEASED) {
+    unsigned long holdDuration = millis() - keyPressStart;
+    isHoldingHash = false;
+
+    if (holdDuration < holdTimeRequired) {
+      Serial.println("Nha # som -> HUY doi mat khau");
+    }
   }
 
-  // xử lý nhập mật khẩu -> mở cửa
-  if (key != NO_KEY) 
-      handleDoorInput(key);
-    
-  
+  // 4. Nếu đang theo dõi mà user bấm phím khác → Hủy
+  if (isHoldingHash && key != '#' && key != NO_KEY) {
+    isHoldingHash = false;
+    Serial.println("Nhan phim khac -> Huy GIU #");
+  }
+
+  // ============================
+  //  Xử lý nhập mật khẩu mở cửa
+  // ============================
+  if (key != NO_KEY) {
+
+    if (isHoldingHash && key == '#') return;
+
+    if (currentInput.length() == 0 && key != '#' && key != '*') {
+      isEnteringDoorPassword = true;
+      lcd.clear();
+      lcd.setCursor(0,0);
+      lcd.print("Nhap mat khau:");
+      lcd.setCursor(0,1);
+    }
+
+    if (key == '*') {
+      if (currentInput.length() > 0) {
+        currentInput.remove(currentInput.length() - 1);
+        lcd.setCursor(currentInput.length(), 1);
+        lcd.print(" ");
+        lcd.setCursor(currentInput.length(), 1);
+
+        if (currentInput.length() == 0) {
+          isEnteringDoorPassword = false;
+          showHomeScreen();
+        }
+      }
+    } else if (key == '#') {
+      handlePasswordCheck(currentInput);
+      currentInput = "";
+      isEnteringDoorPassword = false;
+    } else {
+      if (currentInput.length() < 16) {
+        currentInput += key;
+        lcd.setCursor(currentInput.length() - 1, 1);
+        lcd.print('*');
+      }
+    }
+    delay(120);
+  }
 }
 
-// hàm đọc mật khẩu từ keypad
-// - dùng '*' để xóa ký tự cuối
+void handleChangePw() {
+  keypad.getKey();
+
+  lcd.clear();
+  lcd.setCursor(0,0);
+  lcd.print("Nhap mat khau cu");
+  lcd.setCursor(0,1);
+  lcd.print(">");
+
+  String oldPw = readPasswordFromKeypad();
+
+  if (oldPw != initualPW) {
+    changeFail("Sai mat khau cu", "Doi that bai");
+    return;
+  }
+
+  lcd.clear();
+  lcd.setCursor(0,0);
+  lcd.print("Nhap mat khau moi:");
+  lcd.setCursor(0,1);
+  lcd.print(">");
+
+  String newPw = readPasswordFromKeypad();
+  if(newPw.length() == 0){
+      changeFail("Mat khau khong", "duoc de trong");
+      return;
+  }
+  if (newPw.length() < 4) {
+    changeFail("Toi thieu 4 ky tu", "Vui long thu lai");
+    return;
+  }
+  
+  lcd.clear();
+  lcd.setCursor(0,0);
+  lcd.print("Nhap lai mk moi");
+  lcd.setCursor(0,1);
+  lcd.print(">");
+
+  String newPw2 = readPasswordFromKeypad();
+
+  if (newPw != newPw2) {
+    changeFail("Khong trung khop", "");
+    return;
+  }
+
+  initualPW = newPw;
+  changeSuccess();
+}
+
 String readPasswordFromKeypad() {
 
   String input = "";
-  lcd.setCursor(0, 1);
-  lcd.print(">"); // dòng nhập
+  lcd.setCursor(1, 1);
   
   while (true) {
     char k = keypad.getKey();
+    
     if (k != NO_KEY) {
-      if (k == '*') { // backspace
+      if (k == '*') {
         if (input.length() > 0) {
           input.remove(input.length() - 1);
-          // cập nhật hiển thị
           lcd.setCursor(1, 1);
-          // hiển thị dấu '*' cho mỗi ký tự
           for (int i = 0; i < input.length(); ++i) lcd.print('*');
-          // xóa phần thừa
           lcd.print("                ");
           lcd.setCursor(1 + input.length(), 1);
-          
         }
-      } else if (k == '#') { // submit
-        delay(200); // debounce
+      } else if (k == '#') {
+        delay(200);
         return input;
       } else {
-        // chỉ chấp nhận số (bổ sung nếu muốn chấp nhận chữ)
         if (input.length() < 16) {
           input += k;
           lcd.print('*');
-          
         }
       }
-      // nhỏ delay để tránh quá nhanh
       delay(120);
     }
   }
 }
 
-// đổi mật khẩu: workflow: nhập mật khẩu cũ -> nhập mật khẩu mới -> xác nhận -> lưu
-void handleChangePw() {
-  lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print("Doi mat khau");
-  lcd.setCursor(0, 1);
-  lcd.print("Nhap mat khau cu");
-
-  String enteredOld = readPasswordFromKeypad();
-  Password enteredPw((char*)enteredOld.c_str());
-
-  lcd.clear();
-  if (enteredPw.evaluate()) {
-    // nhập mật khẩu mới
-    lcd.setCursor(0, 0);
-    lcd.print("Nhap mat khau moi");
-    lcd.setCursor(0, 1);
-    String new1 = readPasswordFromKeypad();
-
-    lcd.clear();
-    lcd.setCursor(0, 0);
-    lcd.print("Xac nhan moi");
-    lcd.setCursor(0, 1);
-    String new2 = readPasswordFromKeypad();
-
-    if (new1.length() == 0) {
-      changeFail("Mat khau moi", "khong duoc rong");
-      return;
-    }
-
-    if (new1 == new2) {
-      // cập nhật password object
-      password = Password((char*) new1.c_str());
-      changeSuccess();
-    } else {
-      changeFail("Xac nhan", "khong khop");
-    }
+void handlePasswordCheck(String password) {
+  
+  if (password == initualPW && password.length() > 0) {
+    printAndOpenDoor();
   } else {
-    changeFail("Mat khau cu", "khong dung");
-    wrongPw++;
+    lcd.clear();
+    lcd.setCursor(0,0);
+    lcd.print("MAT KHAU SAI");
+    digitalWrite(red, HIGH);
+    delay(1000);
+    digitalWrite(red, LOW);
+
+    if (password.length() > 0) wrongPw++;
+
     if (wrongPw >= 5) {
       isDoorLocked = true;
       lockDoor();
       return;
     }
-  }
-}
-
-void handleDoorInput(char key) {
-  String currentInput = "";
-  // khi người dùng nhấn phím:
-  if (key == '*') { // xóa
-    if (currentInput.length() > 0) currentInput.remove(currentInput.length() - 1);
-    // cập nhật LCD (dễ hiểu)
-    lcd.setCursor(0, 1);
-    lcd.print("                ");
-    lcd.setCursor(0, 1);
-    for (int i = 0; i < currentInput.length(); ++i) lcd.print('*');
-    return;
-  }
-
-  if (key == '#') { // submit
-    Password currentPw((char*)currentInput.c_str());
-    if (currentPw.evaluate()) {
-      // đúng mật khẩu -> mở cửa
-      lcd.clear();
-      lcd.setCursor(0,0);
-      lcd.print("CHINH XAC!");
-      digitalWrite(green, HIGH);
-      servo.write(90);
-      delay(3000);
-      servo.write(0);
-      digitalWrite(green, LOW);
-      wrongPw = 0;
-      currentInput = "";
-      showHomeScreen();
-    } else {
-      // sai mật khẩu
-      lcd.clear();
-      lcd.setCursor(0,0);
-      lcd.print("MAT KHAU SAI");
-      digitalWrite(red, HIGH);
-      delay(1000);
-      digitalWrite(red, LOW);
-      wrongPw++;
-      currentInput = "";
-      if (wrongPw >= 5) {
-        isDoorLocked = true;
-        lockDoor();
-        return;
-      }
-      showHomeScreen();
-    }
-    return;
-  }
-
-  // nếu là phím số/ki tu bình thường -> thêm vào input
-  if (key != NO_KEY) {
-    // chỉ chấp nhận 0-9 (hoặc bạn có thể chấp nhận A-D)
-    if (currentInput.length() < 16) {
-      currentInput += key;
-      lcd.setCursor(0,1);
-      for (int i = 0; i < currentInput.length(); ++i) lcd.print('*');
-    }
+    showHomeScreen();
   }
 }
 
@@ -338,7 +268,6 @@ void lockDoor() {
   lcd.print("DA KHOA HE THONG");
   lcd.setCursor(0, 1);
   lcd.print("MO BANG APP");
-  // nháy đỏ vài lần
   for (int i = 0; i < 4; ++i) {
     digitalWrite(red, HIGH);
     delay(300);
@@ -347,16 +276,34 @@ void lockDoor() {
   }
 }
 
-void unlockFromApp() {
-  isDoorLocked = false;
-  wrongPw = 0;
+void printAndOpenDoor(){
+  //relay, servo
   lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print("APP UNLOCK OK");
-  digitalWrite(blue, HIGH);
-  delay(1000);
-  digitalWrite(blue, LOW);
+  lcd.setCursor(4,0);
+  lcd.print("CUA MO");
+  lcd.setCursor(2,1);
+  lcd.print("THANH CONG!");
+  digitalWrite(green, HIGH);
+  servo.write(90);
+  digitalWrite(relay, HIGH);
+  delay(3000);
+  servo.write(0);
+  digitalWrite(green, LOW);
+  digitalWrite(relay, LOW);
+  wrongPw = 0;
   showHomeScreen();
+}
+
+void unlockFromApp() {
+  // isDoorLocked = false;
+  // wrongPw = 0;
+  // lcd.clear();
+  // lcd.setCursor(0, 0);
+  // lcd.print("MO KHOA BANG APP");
+  // digitalWrite(green, HIGH);
+  // delay(1000);
+  // digitalWrite(green, LOW);
+  // showHomeScreen();
 }
 
 void changeFail(String first, String second) {
@@ -374,26 +321,22 @@ void changeFail(String first, String second) {
 void changeSuccess() {
   lcd.clear();
   lcd.setCursor(0,0);
-  lcd.print("Doi mat khau");
+  lcd.print("DOI MAT KHAU");
   lcd.setCursor(0,1);
-  lcd.print("thanh cong");
+  lcd.print("THANH CONG");
   digitalWrite(blue, HIGH);
   delay(1500);
   digitalWrite(blue, LOW);
   showHomeScreen();
 }
 
-
-
 void showHomeScreen() {
   servo.write(0);
-  // không reset wrongPw ở đây nếu bạn muốn giữ số lần sai; theo code gốc bạn reset -> mình giữ nguyên
-  // wrongPw = 0;
   lcd.clear();
   lcd.setCursor(3, 0);
   lcd.print("KHOA CUA");
   lcd.setCursor(3, 1);
   lcd.print("THONG MINH");
-  delay(1500);
+  delay(2000);
   lcd.clear();
 }
