@@ -5,3 +5,6 @@
 .vscode/ipch
 .data/
 settings.json
+.config*
+mosquitto.log
+mosquitto.db
