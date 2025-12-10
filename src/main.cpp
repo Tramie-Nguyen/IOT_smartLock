@@ -3,6 +3,59 @@
 #include <LiquidCrystal_I2C.h>
 #include <Keypad.h>
 #include <ESP32Servo.h>
+#include <WiFi.h>
+#include <PubSubClient.h>
+
+const char* ssid = "TEN_WIFI";
+const char* password = "MAT_KHAU_WIFI";
+
+const char* mqtt_server = "192.168.1.100"; // IP máy chạy Docker
+// Nếu ESP32 + Docker cùng máy → dùng IP máy tính, KHÔNG dùng 127.0.0.1
+int port = 1883;
+
+WiFiClient wifiClient;
+PubSubClient mqttClient(wifiClient);
+
+void wifiConnect() {
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println(" Connected!");
+}
+
+void mqttConnect() {
+  while(!mqttClient.connected()) {
+    Serial.println("Attemping MQTT connection...");
+    String clientId = "ESP32Client-" + String(random(0xffff), HEX); // random để tránh trùng ID
+    if(mqttClient.connect(clientId.c_str())) {
+      Serial.println("connected");
+
+      //***Subscribe all topic you need***
+      mqttClient.subscribe("TOPICS_TO_SUBSCRIBE");
+     
+    }
+    else {
+      Serial.print(mqttClient.state());
+      Serial.println("try again in 5 seconds");
+      delay(5000);
+    }
+  }
+}
+
+//MQTT Receiver
+void callback(char* topic, byte* message, unsigned int length) {
+  Serial.println(topic);
+  String msg;
+  for(int i=0; i<length; i++) {
+    msg += (char)message[i];
+  }
+  Serial.println(msg);
+
+  //***Code here to process the received package***
+
+}
 
 #define servoPin 33
 Servo servo;
@@ -59,6 +112,11 @@ void setup() {
   pinMode(green, OUTPUT);
   pinMode(relay, OUTPUT);
 
+  // wifiConnect();
+  // mqttClient.setServer(mqtt_server, port);
+  // mqttClient.setCallback(callback);
+  // mqttClient.setKeepAlive( 90 );
+
   servo.attach(servoPin);
 
   lcd.init();
@@ -67,6 +125,14 @@ void setup() {
 }
 
 void loop() {
+  // if (WiFi.status() != WL_CONNECTED) {
+  //   Serial.print("Reconnecting to WiFi");
+  //   wifiConnect();
+  // }
+  // if(!mqttClient.connected()) {
+  //   mqttConnect();
+  // }
+  // mqttClient.loop();
   char key = keypad.getKey();
   KeyState state = keypad.getState();   // <<=== LẤY TRẠNG THÁI PHÍM
 

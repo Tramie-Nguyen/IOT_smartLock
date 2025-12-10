@@ -1,6 +1,6 @@
 [
     {
-        "id": "20c8313b57bb01f9",
+        "id": "a84c96473276e6eb",
         "type": "tab",
         "label": "Flow 1",
         "disabled": false,
@@ -8,10 +8,10 @@
         "env": []
     },
     {
-        "id": "2252366caf3f3693",
+        "id": "73f85ef7d6da89c2",
         "type": "mqtt-broker",
         "name": "",
-        "broker": "mosquitto",
+        "broker": "mqtt-broker",
         "port": 1883,
         "clientid": "",
         "autoConnect": true,
@@ -39,30 +39,30 @@
         "sessionExpiry": ""
     },
     {
-        "id": "8904122abb87fe7e",
+        "id": "8457f2ae0965c928",
         "type": "mqtt in",
-        "z": "20c8313b57bb01f9",
+        "z": "a84c96473276e6eb",
         "name": "",
-        "topic": "/23127428/temp",
-        "qos": "2",
+        "topic": "smartlock/status",
+        "qos": "0",
         "datatype": "auto-detect",
-        "broker": "2252366caf3f3693",
+        "broker": "73f85ef7d6da89c2",
         "nl": false,
         "rap": true,
         "rh": 0,
         "inputs": 0,
-        "x": 220,
-        "y": 260,
+        "x": 340,
+        "y": 200,
         "wires": [
             [
-                "e70afc164bbbd44b"
+                "0d73fdacae1beb30"
             ]
         ]
     },
     {
-        "id": "e70afc164bbbd44b",
+        "id": "0d73fdacae1beb30",
         "type": "debug",
-        "z": "20c8313b57bb01f9",
+        "z": "a84c96473276e6eb",
         "name": "debug 1",
         "active": true,
         "tosidebar": true,
@@ -71,32 +71,14 @@
         "complete": "false",
         "statusVal": "",
         "statusType": "auto",
-        "x": 460,
-        "y": 260,
+        "x": 580,
+        "y": 200,
         "wires": []
     },
     {
-        "id": "9ac9efde32770488",
-        "type": "mqtt out",
-        "z": "20c8313b57bb01f9",
-        "name": "",
-        "topic": "/23127428/command",
-        "qos": "0",
-        "retain": "false",
-        "respTopic": "",
-        "contentType": "",
-        "userProps": "",
-        "correl": "",
-        "expiry": "",
-        "broker": "2252366caf3f3693",
-        "x": 520,
-        "y": 400,
-        "wires": []
-    },
-    {
-        "id": "4361dc1afeafbfca",
+        "id": "fbeb7ba1b0c19932",
         "type": "inject",
-        "z": "20c8313b57bb01f9",
+        "z": "a84c96473276e6eb",
         "name": "",
         "props": [
             {
@@ -112,14 +94,32 @@
         "once": false,
         "onceDelay": 0.1,
         "topic": "",
-        "payload": "open",
+        "payload": "door open",
         "payloadType": "str",
-        "x": 230,
-        "y": 400,
+        "x": 340,
+        "y": 300,
         "wires": [
             [
-                "9ac9efde32770488"
+                "86eaeaf1e5d816b4"
             ]
         ]
+    },
+    {
+        "id": "86eaeaf1e5d816b4",
+        "type": "mqtt out",
+        "z": "a84c96473276e6eb",
+        "name": "",
+        "topic": "smartlock/status",
+        "qos": "0",
+        "retain": "",
+        "respTopic": "",
+        "contentType": "",
+        "userProps": "",
+        "correl": "",
+        "expiry": "",
+        "broker": "73f85ef7d6da89c2",
+        "x": 580,
+        "y": 300,
+        "wires": []
     }
 ]
