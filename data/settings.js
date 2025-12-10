@@ -620,4 +620,5 @@ module.exports = {
     //    *   - reason: if result is false, the HTTP reason string to return
     //    */
     //},
+    credentialSecret: "myteam-secret-key",
 }
