@@ -19,24 +19,10 @@
     },
     {
       "type": "wokwi-led",
-      "id": "led1",
-      "top": 150,
-      "left": 42.2,
-      "attrs": { "color": "blue" }
-    },
-    {
-      "type": "wokwi-led",
       "id": "led3",
       "top": 92.4,
       "left": 42.2,
       "attrs": { "color": "green" }
-    },
-    {
-      "type": "wokwi-resistor",
-      "id": "r2",
-      "top": 186.35,
-      "left": 86.4,
-      "attrs": { "value": "220" }
     },
     {
       "type": "wokwi-membrane-keypad",
@@ -116,32 +102,12 @@
     ["lcd1:GND", "bb1:tn.2", "black", ["h-48", "v134.4", "h38.4"]],
     ["lcd1:VCC", "bb1:tp.4", "red", ["h-28.8", "v115.3", "h38.4"]],
     ["esp:5V", "bb1:tp.1", "red", ["h-57.45", "v-451.2", "h28.8"]],
-    ["led1:A", "r2:1", "green", ["v0"]],
     ["bb1:bn.1", "esp:GND.1", "black", ["v37.1", "h-94.4", "v182.4"]],
-    ["bb1:bn.6", "led1:C", "black", ["v0"]],
     ["bb1:bn.8", "led3:C", "black", ["v0"]],
     ["led3:A", "r3:1", "green", ["v0"]],
     ["lcd1:SDA", "esp:21", "blue", ["h-105.6", "v403.4", "h124.8", "v96"]],
     ["lcd1:SCL", "esp:22", "violet", ["h-124.8", "v384.3", "h134.4", "v76.8"]],
     ["esp:23", "r3:2", "green", ["h28.8", "v48", "h124.8"]],
-    [
-      "esp:5",
-      "keypad1:R1",
-      "green",
-      ["h19.2", "v-19.2", "h163.2", "v259.2", "h163.2"]
-    ],
-    [
-      "esp:18",
-      "keypad1:R2",
-      "green",
-      ["h9.6", "v-9.6", "h172.8", "v268.8", "h172.8"]
-    ],
-    [
-      "esp:19",
-      "keypad1:R3",
-      "green",
-      ["h182.4", "v240", "h0", "v38.4", "h192"]
-    ],
     ["esp:32", "keypad1:C4", "green", ["h-67.05", "v336", "h576"]],
     [
       "servo1:V+",
@@ -158,7 +124,6 @@
     ["esp:33", "servo1:PWM", "gold", ["h-412.65", "v-374.4"]],
     ["esp:25", "keypad1:R4", "green", ["v0", "h-47.85", "v278.4", "h508.8"]],
     ["esp:26", "keypad1:C1", "green", ["h-38.25", "v278.4", "h508.8"]],
-    ["esp:17", "r2:2", "green", ["h19.2", "v28.8", "h145.2"]],
     [
       "relay1:GND",
       "bb1:tn.4",
@@ -188,7 +153,10 @@
     ["esp:2", "keypad1:C3", "green", ["h19.2", "v249.6", "h384"]],
     ["led2:C", "bb1:tn.8", "black", ["v240", "h154"]],
     ["r1:1", "relay1:COM", "green", ["v0"]],
-    ["relay1:NO", "esp:3V3", "orange", ["h39.6", "v343.8"]]
+    ["relay1:NO", "esp:3V3", "orange", ["h39.6", "v343.8"]],
+    ["esp:17", "keypad1:R1", "green", ["h28.8", "v230.4", "h316.8"]],
+    ["esp:15", "keypad1:R2", "green", ["v0", "h28.8", "v192", "h326.4"]],
+    ["esp:14", "keypad1:R3", "green", ["h-28.65", "v240", "h480"]]
   ],
   "dependencies": {}
 }

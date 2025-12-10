@@ -11,7 +11,6 @@ LiquidCrystal_I2C lcd(0x27, 16, 2);
 
 int red = 16;
 int wrongPw = 0;
-int blue = 17;
 int green = 23;
 int relay = 27;
 bool isDoorLocked = false;
@@ -33,7 +32,7 @@ char keys[ROWS][COLS] =
   {'*', '0', '#', 'D'},
 };
 
-byte rowPins[ROWS] = {5, 18, 19, 25};
+byte rowPins[ROWS] = {17, 15, 14, 25};
 byte colPins[COLS] = {26, 4, 2, 32};
 String initualPW = "123456";
 String currentInput = "";
@@ -57,7 +56,6 @@ void setup() {
   Serial.begin(115200);
   Serial.println("--- KHOI DONG HE THONG ---");
   pinMode(red, OUTPUT);
-  pinMode(blue, OUTPUT);
   pinMode(green, OUTPUT);
   pinMode(relay, OUTPUT);
 
@@ -324,9 +322,9 @@ void changeSuccess() {
   lcd.print("DOI MAT KHAU");
   lcd.setCursor(0,1);
   lcd.print("THANH CONG");
-  digitalWrite(blue, HIGH);
+  digitalWrite(green, HIGH);
   delay(1500);
-  digitalWrite(blue, LOW);
+  digitalWrite(green, LOW);
   showHomeScreen();
 }
 
