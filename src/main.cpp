@@ -351,7 +351,6 @@ void lockDoor() {
 }
 
 void printAndOpenDoor(){
-  //relay, servo
   lcd.clear();
   lcd.setCursor(4,0);
   lcd.print("CUA MO");
