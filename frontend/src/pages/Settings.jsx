@@ -1,9 +1,13 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Eye, EyeOff, Settings as SettingsIcon, ArrowLeft, Home as HomeIcon, Lock, User, Shield } from 'lucide-react';
+import { Eye, EyeOff, Settings as SettingsIcon, ArrowLeft, Home as HomeIcon, Lock, User } from 'lucide-react';
+import { socket } from '../socket';
+import axios from 'axios';
 
 const Settings = () => {
   const navigate = useNavigate();
+  const [oldAccountPassword, setOldAccountPassword] = useState('');
+  const [oldLockPassword, setOldLockPassword] = useState('');
   const [accountPassword, setAccountPassword] = useState('');
   const [accountPasswordConfirm, setAccountPasswordConfirm] = useState('');
   const [lockPassword, setLockPassword] = useState('');
@@ -12,6 +16,34 @@ const Settings = () => {
   const [showAccountPassConfirm, setShowAccountPassConfirm] = useState(false);
   const [showLockPass, setShowLockPass] = useState(false);
   const [showLockPassConfirm, setShowLockPassConfirm] = useState(false);
+  const [showOldLockPass, setShowOldLockPass] = useState(false);
+  const [showOldAccountPass, setShowOldAccountPass] = useState(false);
+
+  // Lắng nghe phản hồi từ ESP qua socket
+  useEffect(() => {
+    const handleLockPasswordResponse = (data) => {
+      const message = data.message;
+      
+      if (message === 'JSON_ERROR') {
+        alert('Error: Invalid data format');
+      } else if (message === 'WRONG_OLD_PASSWORD') {
+        alert('Error: Wrong old password');
+      } else if (message === 'SUCCESS') {
+        alert('Lock password updated successfully');
+        setOldLockPassword('');
+        setLockPassword('');
+        setLockPasswordConfirm('');
+        setShowLockPass(false);
+        setShowLockPassConfirm(false);
+      }
+    };
+
+    socket.on('051_428_475/esp/change_pw/res', handleLockPasswordResponse);
+
+    return () => {
+      socket.off('051_428_475/esp/change_pw/res', handleLockPasswordResponse);
+    };
+  }, []);
 
   const handleAccountPasswordChange = (e) => {
     e.preventDefault();
@@ -33,7 +65,7 @@ const Settings = () => {
     setShowAccountPassConfirm(false);
   };
 
-  const handleLockPasswordChange = (e) => {
+  const handleLockPasswordChange = async (e) => {
     e.preventDefault();
     
     if (lockPassword !== lockPasswordConfirm) {
@@ -49,12 +81,22 @@ const Settings = () => {
       return;
     }
     
-    // TODO: Add API call to update lock password
-    alert('Lock password updated successfully');
-    setLockPassword('');
-    setLockPasswordConfirm('');
-    setShowLockPass(false);
-    setShowLockPassConfirm(false);
+    try {
+      // Gọi API để đổi mật khẩu khóa
+      const response = await axios.post('http://localhost:3000/api/change-lock-password', {
+        oldLockPassword: oldLockPassword,
+        newLockPassword: lockPassword
+      });
+      
+      alert('Lock password change request sent. Waiting for ESP response...');
+    } catch (error) {
+      console.error('Error changing lock password:', error);
+      if (error.response && error.response.data && error.response.data.message) {
+        alert(`Error: ${error.response.data.message}`);
+      } else {
+        alert('Error: Could not connect to server');
+      }
+    }
   };
 
   return (
@@ -103,6 +145,30 @@ const Settings = () => {
             </div>
             
             <form onSubmit={handleAccountPasswordChange} className="space-y-4">
+              {/* Old Password Field */}
+              <div>
+                <label className="text-sm font-medium text-gray-700 block mb-2">
+                  Old Password
+                </label>
+                <div className="relative">
+                  <input
+                    type={showOldAccountPass ? 'text' : 'password'}
+                    value={oldAccountPassword}
+                    onChange={(e) => setOldAccountPassword(e.target.value)}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-200"
+                    placeholder="Enter old password"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowOldAccountPass(!showOldAccountPass)}
+                    className="absolute right-3 top-3.5 text-gray-400 hover:text-gray-600"
+                  >
+                    {showOldAccountPass ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
+                </div>
+              </div>
+              {/* New Password Field */}
               <div>
                 <label className="text-sm font-medium text-gray-700 block mb-2">
                   New Password
@@ -125,7 +191,7 @@ const Settings = () => {
                   </button>
                 </div>
               </div>
-
+              {/* Confirm Password Field */}
               <div>
                 <label className="text-sm font-medium text-gray-700 block mb-2">
                   Confirm Password
@@ -168,6 +234,32 @@ const Settings = () => {
             </div>
             
             <form onSubmit={handleLockPasswordChange} className="space-y-4">
+              {/* Old Lock Password Field */}
+              <div>
+                <label className="text-sm font-medium text-gray-700 block mb-2">
+                  Old Lock Password (PIN)
+                </label>
+                <div className="relative">
+                  <input
+                    type={showOldLockPass ? 'text' : 'password'}
+                    value={oldLockPassword}
+                    onChange={(e) => setOldLockPassword(e.target.value)}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition duration-200"
+                    placeholder="Enter old PIN"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowOldLockPass(!showOldLockPass)}
+                    className="absolute right-3 top-3.5 text-gray-400 hover:text-gray-600"
+                  >
+                    {showOldLockPass ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
+                </div>
+              </div>
+              {/* New Lock Password Field */}
               <div>
                 <label className="text-sm font-medium text-gray-700 block mb-2">
                   New Lock Password (PIN)
@@ -192,7 +284,7 @@ const Settings = () => {
                   </button>
                 </div>
               </div>
-
+              {/* Confirm Lock Password Field */}
               <div>
                 <label className="text-sm font-medium text-gray-700 block mb-2">
                   Confirm Lock Password
