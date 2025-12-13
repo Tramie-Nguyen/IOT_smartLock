@@ -21,6 +21,61 @@ int port = 1883;
 WiFiClient wifiClient;
 PubSubClient mqttClient(wifiClient);
 
+//RFID
+#define SS_PIN 5
+#define RST_PIN 13
+
+MFRC522 mfrc522(SS_PIN, RST_PIN);
+//String uid1 = "51 a5 12 6";
+String uid2 = "71 1 47 17";
+
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+
+int red = 15;
+int wrongPw = 0;
+int greenLedAndRelay = 14; // lúc đầu là green 2, relay 14
+
+// cờ check cửa có bị khóa do người dùng nhập sai 5 lần hay không
+bool isDoorLocked = false;
+int nfcFailed = 0;
+
+// các biến giám sát khoảng cách
+int trig = 27;
+int echo = 36; // lúc đầu là 32
+bool isSomeoneDetected = false;         
+unsigned long nearStartTime = 0;        
+bool isNear = false;    
+
+const int NEAR_THRESHOLD = 20;         
+const unsigned long NEAR_DURATION = 5000;
+
+// các biến quản lý chức năng đổi mật khẩu
+unsigned long keyPressStart = 0;
+unsigned long holdTimeRequired = 3000;
+bool isHoldingHash = false;
+
+// quản lý keypad
+const byte ROWS = 4;
+const byte COLS = 3;
+
+char keys[ROWS][COLS] =
+{
+  {'1', '2', '3'},
+  {'4', '5', '6'},
+  {'7', '8', '9'},
+  {'*', '0', '#'},
+};
+
+//byte rowPins[ROWS] = {17, 15, 14, 25};
+byte rowPins[ROWS] = {0, 4, 16, 17};
+byte colPins[COLS] = {32, 33, 25}; 
+//byte colPins[COLS] = {26, 4, 2};
+String initualPW = "123456";
+String currentInput = "";
+bool isEnteringDoorPassword = false;
+
+Keypad keypad = Keypad(makeKeymap(keys), rowPins, colPins, ROWS, COLS);
+
 void wifiConnect() {
   WiFi.begin(ssid, password);
   while (WiFi.status() != WL_CONNECTED) {
@@ -64,69 +119,6 @@ void callback(char* topic, byte* message, unsigned int length) {
 
 }
 
-//RFID
-#define SS_PIN 5
-#define RST_PIN 13
-
-MFRC522 mfrc522(SS_PIN, RST_PIN);
-//String uid1 = "51 a5 12 6";
-String uid2 = "71 1 47 17";
-
-LiquidCrystal_I2C lcd(0x27, 16, 2);
-
-int red = 15;
-int wrongPw = 0;
-int greenLedAndRelay = 23; 
-
-// các biến giám sát khoảng cách
-int trig = 27;
-int echo = 32;
-bool isSomeoneDetected = false;         
-unsigned long nearStartTime = 0;        
-bool isNear = false;                    
-
-const int NEAR_THRESHOLD = 20;         
-const unsigned long NEAR_DURATION = 5000;
-
-// cờ check cửa có bị khóa do người dùng nhập sai 5 lần hay không
-bool isDoorLocked = false;
-int nfcFailed = 0;
-
-// các biến giám sát khoảng cách
-int trig = 27;
-int echo = 32;
-bool isSomeoneDetected = false;         
-unsigned long nearStartTime = 0;        
-bool isNear = false;    
-
-const int NEAR_THRESHOLD = 20;         
-const unsigned long NEAR_DURATION = 5000;
-
-// các biến quản lý chức năng đổi mật khẩu
-unsigned long keyPressStart = 0;
-unsigned long holdTimeRequired = 3000;
-bool isHoldingHash = false;
-
-// quản lý keypad
-const byte ROWS = 4;
-const byte COLS = 3;
-
-char keys[ROWS][COLS] =
-{
-  {'1', '2', '3'},
-  {'4', '5', '6'},
-  {'7', '8', '9'},
-  {'*', '0', '#'},
-};
-
-byte rowPins[ROWS] = {17, 15, 14, 25};
-byte colPins[COLS] = {26, 4, 2};
-String initualPW = "123456";
-String currentInput = "";
-bool isEnteringDoorPassword = false;
-
-Keypad keypad = Keypad(makeKeymap(keys), rowPins, colPins, ROWS, COLS);
-
 // PROTOTYPE
 String readPasswordFromKeypad();
 void handlePasswordCheck(String password);
@@ -142,8 +134,8 @@ int getDistanceCm();
 
 
 void checkRFID() {
-  if (!mfrc522.PICC_IsNewCardPresent()) return;
-  if (!mfrc522.PICC_ReadCardSerial()) return;
+  if (!mfrc522.PICC_IsNewCardPresent()) return;// kiểm tra có thẻ mới không
+  if (!mfrc522.PICC_ReadCardSerial()) return;// kiểm tra đọc thẻ thành công không
 
   // Lấy UID
   String uid = "";
@@ -174,6 +166,7 @@ void checkRFID() {
 
   // dừng đọc thẻ cũ
   mfrc522.PICC_HaltA();
+  // tắt mã hóa
   mfrc522.PCD_StopCrypto1();
 }
 
@@ -184,7 +177,6 @@ void handleChangePWFromWeb(String msg) {
   DeserializationError error = deserializeJson(doc, msg);
 
   if (error) {
-    Serial.println("JSON parse FAILED");
     Serial.println("JSON parse FAILED");
     return;
   }
@@ -213,8 +205,11 @@ void handleChangePWFromWeb(String msg) {
 void setup() {
   Serial.begin(115200);
   Serial.println("--- KHOI DONG HE THONG ---");
+
   pinMode(red, OUTPUT);
   pinMode(greenLedAndRelay, OUTPUT);
+  pinMode(echo, INPUT);
+  pinMode(trig, OUTPUT);
 
   SPI.begin(18, 19, 23);      // SCK=18, MISO=19, MOSI=23
   mfrc522.PCD_Init();
@@ -224,14 +219,10 @@ void setup() {
   mqttClient.setServer(mqtt_server, port);
   mqttClient.setCallback(callback);
   mqttClient.setKeepAlive( 90 );
-  
-  pinMode(echo, INPUT);
-  pinMode(trig, OUTPUT);
 
   lcd.init();
   lcd.backlight();
   showHomeScreen();
-
 }
 
 void loop() {
@@ -240,6 +231,7 @@ void loop() {
     wifiConnect();
   }
   if(!mqttClient.connected()) {
+    Serial.print("Reconnecting to MQTT");
     mqttConnect();
   }
   mqttClient.loop();
