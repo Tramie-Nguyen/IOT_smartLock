@@ -5,6 +5,9 @@
 
 #include <WiFi.h>
 #include <PubSubClient.h>
+
+#include <SPI.h>
+#include <MFRC522.h>
 #include <ArduinoJson.h>
 
 const char* ssid = "Mit";
@@ -61,15 +64,9 @@ void callback(char* topic, byte* message, unsigned int length) {
 
 }
 
-
-
-
-#include <SPI.h>
-#include <MFRC522.h>
-
+//RFID
 #define SS_PIN 5
 #define RST_PIN 13
-
 
 MFRC522 mfrc522(SS_PIN, RST_PIN);
 //String uid1 = "51 a5 12 6";
@@ -79,9 +76,9 @@ LiquidCrystal_I2C lcd(0x27, 16, 2);
 
 int red = 15;
 int wrongPw = 0;
-int greenLedAndRelay = 23; //dư chân 27
+int greenLedAndRelay = 23; 
 
-// --- GIÁM SÁT KHOẢNG CÁCH ---
+// các biến giám sát khoảng cách
 int trig = 27;
 int echo = 32;
 bool isSomeoneDetected = false;         
@@ -140,6 +137,9 @@ void changeFail(String first, String second);
 void changeSuccess();
 void showHomeScreen();
 void printAndOpenDoor();
+void updateDistanceWatcher();
+int getDistanceCm();
+
 
 void checkRFID() {
   if (!mfrc522.PICC_IsNewCardPresent()) return;
@@ -294,9 +294,7 @@ void loop() {
     Serial.println("Nhan phim khac -> Huy GIU #");
   }
 
-  // ============================
-  //  Xử lý nhập mật khẩu mở cửa
-  // ============================
+  //Xử lý nhập mật khẩu cửa
   if (key != NO_KEY) {
 
     if (isHoldingHash && key == '#') return;
@@ -334,6 +332,7 @@ void loop() {
     }
     delay(120);
   }
+  updateDistanceWatcher();
 }
 
 void handleChangePw() {
