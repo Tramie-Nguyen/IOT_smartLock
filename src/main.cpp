@@ -41,7 +41,7 @@ int nfcFailed = 0;
 
 // các biến giám sát khoảng cách
 int trig = 27;
-int echo = 36; // lúc đầu là 32
+int echo = 35; // lúc đầu là 32
 bool isSomeoneDetected = false;         
 unsigned long nearStartTime = 0;        
 bool isNear = false;    
@@ -76,13 +76,26 @@ bool isEnteringDoorPassword = false;
 
 Keypad keypad = Keypad(makeKeymap(keys), rowPins, colPins, ROWS, COLS);
 
+// PROTOTYPE
+String readPasswordFromKeypad();
+void handlePasswordCheck(String password);
+void lockDoor();
+void unlockFromApp();
+void handleChangePw();
+void changeFail(String first, String second);
+void changeSuccess();
+void showHomeScreen();
+void printAndOpenDoor();
+void updateDistanceWatcher();
+int getDistanceCm();
+
 void wifiConnect() {
   WiFi.begin(ssid, password);
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
-    Serial.print(".");
+    Serial.println("Attemping WiFi connection...");
   }
-  Serial.println(" Connected!");
+  Serial.println("Wifi connected!");
 }
 
 void mqttConnect() {
@@ -90,7 +103,7 @@ void mqttConnect() {
     Serial.println("Attemping MQTT connection...");
     String clientId = "ESP32Client-" + String(random(0xffff), HEX); // random để tránh trùng ID
     if(mqttClient.connect(clientId.c_str())) {
-      Serial.println("connected");
+      Serial.println("MQTT connected");
 
       //***Subscribe all topic you need***
       mqttClient.subscribe((teamKey + "/esp/change_pw").c_str());
@@ -118,20 +131,6 @@ void callback(char* topic, byte* message, unsigned int length) {
   }
 
 }
-
-// PROTOTYPE
-String readPasswordFromKeypad();
-void handlePasswordCheck(String password);
-void lockDoor();
-void unlockFromApp();
-void handleChangePw();
-void changeFail(String first, String second);
-void changeSuccess();
-void showHomeScreen();
-void printAndOpenDoor();
-void updateDistanceWatcher();
-int getDistanceCm();
-
 
 void checkRFID() {
   if (!mfrc522.PICC_IsNewCardPresent()) return;// kiểm tra có thẻ mới không
@@ -227,16 +226,18 @@ void setup() {
 
 void loop() {
   if (WiFi.status() != WL_CONNECTED) {
-    Serial.print("Reconnecting to WiFi");
+    Serial.println("Reconnecting to WiFi...");
     wifiConnect();
   }
   if(!mqttClient.connected()) {
-    Serial.print("Reconnecting to MQTT");
+    Serial.println("Reconnecting to MQTT...");
     mqttConnect();
   }
   mqttClient.loop();
 
   checkRFID();
+
+  updateDistanceWatcher();
 
   char key = keypad.getKey();
   KeyState state = keypad.getState();   // <<=== LẤY TRẠNG THÁI PHÍM
@@ -324,7 +325,6 @@ void loop() {
     }
     delay(120);
   }
-  updateDistanceWatcher();
 }
 
 void handleChangePw() {
@@ -423,6 +423,7 @@ void handlePasswordCheck(String password) {
 
     if (wrongPw >= 5) {
       isDoorLocked = true;
+      mqttClient.publish((teamKey + "/esp/keypad-failed").c_str(), String(wrongPw).c_str());
       lockDoor();
       return;
     }
@@ -493,6 +494,7 @@ void updateDistanceWatcher() {
         Serial.println("Phat hien nguoi dung truoc cua !");
         
         // gửi tín hiệu topic cho MQTT
+        mqttClient.publish((teamKey + "/esp/loitering-detected").c_str(), "An unknown person has been standing in front of the door for an extended period of time");
       }
     }
   }
@@ -500,6 +502,7 @@ void updateDistanceWatcher() {
     // Không gần nữa → reset
     isNear = false;
     nearStartTime = 0;
+    isSomeoneDetected = false;
   }
 }
 
