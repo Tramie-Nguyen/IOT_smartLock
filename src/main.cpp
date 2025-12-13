@@ -5,12 +5,14 @@
 
 #include <WiFi.h>
 #include <PubSubClient.h>
+#include <ArduinoJson.h>
 
-const char* ssid = "TEN_WIFI";
-const char* password = "MAT_KHAU_WIFI";
+const char* ssid = "Mit";
+const char* password = "27072005";
 
-const char* mqtt_server = "192.168.1.100"; // IP máy chạy Docker
-// Nếu ESP32 + Docker cùng máy → dùng IP máy tính, KHÔNG dùng 127.0.0.1
+String teamKey = "051_428_475";
+
+const char* mqtt_server = "broker.hivemq.com";
 int port = 1883;
 
 WiFiClient wifiClient;
@@ -33,8 +35,7 @@ void mqttConnect() {
       Serial.println("connected");
 
       //***Subscribe all topic you need***
-      mqttClient.subscribe("TOPICS_TO_SUBSCRIBE");
-     
+      mqttClient.subscribe((teamKey + "/esp/change_pw").c_str());
     }
     else {
       Serial.print(mqttClient.state());
@@ -54,14 +55,29 @@ void callback(char* topic, byte* message, unsigned int length) {
   Serial.println(msg);
 
   //***Code here to process the received package***
+  if (String(topic) == (teamKey + "/esp/change_pw").c_str()) {
+    handleChangePWFromWeb(msg);
+  }
 
 }
 
 
 
+
+#include <SPI.h>
+#include <MFRC522.h>
+
+#define SS_PIN 5
+#define RST_PIN 13
+
+
+MFRC522 mfrc522(SS_PIN, RST_PIN);
+//String uid1 = "51 a5 12 6";
+String uid2 = "71 1 47 17";
+
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 
-int red = 16;
+int red = 15;
 int wrongPw = 0;
 int greenLedAndRelay = 23; //dư chân 27
 
@@ -77,6 +93,7 @@ const unsigned long NEAR_DURATION = 5000;
 
 // cờ check cửa có bị khóa do người dùng nhập sai 5 lần hay không
 bool isDoorLocked = false;
+int nfcFailed = 0;
 
 // các biến giám sát khoảng cách
 int trig = 27;
@@ -124,6 +141,74 @@ void changeSuccess();
 void showHomeScreen();
 void printAndOpenDoor();
 
+void checkRFID() {
+  if (!mfrc522.PICC_IsNewCardPresent()) return;
+  if (!mfrc522.PICC_ReadCardSerial()) return;
+
+  // Lấy UID
+  String uid = "";
+  for (byte i = 0; i < mfrc522.uid.size; i++) {
+    uid += String(mfrc522.uid.uidByte[i], HEX);
+    uid += " ";
+  }
+  uid.trim(); // bỏ space cuối
+
+  Serial.print("RFID UID: ");
+  Serial.println(uid);
+
+  // so sánh UID
+  if (uid == uid2) {
+    Serial.println("The hop le -> Mo cua!");
+    printAndOpenDoor();
+  } else {
+    Serial.println("The khong hop le!");
+    nfcFailed += 1;
+    if(nfcFailed >= 5) {
+      Serial.println("NFC sai qua 5 lan");
+      mqttClient.publish((teamKey + "/esp/nfc-failed").c_str(), String(nfcFailed).c_str());
+    }
+    digitalWrite(red, HIGH);
+    delay(500);
+    digitalWrite(red, LOW);
+  }
+
+  // dừng đọc thẻ cũ
+  mfrc522.PICC_HaltA();
+  mfrc522.PCD_StopCrypto1();
+}
+
+void handleChangePWFromWeb(String msg) {
+  Serial.println("Handling change password from web...");
+
+  StaticJsonDocument<200> doc;
+  DeserializationError error = deserializeJson(doc, msg);
+
+  if (error) {
+    Serial.println("JSON parse FAILED");
+    Serial.println("JSON parse FAILED");
+    return;
+  }
+
+  String oldPW = doc["oldPW"].as<String>();
+  String newPW = doc["newPW"].as<String>();
+
+  Serial.println("Old PW: " + oldPW);
+  Serial.println("New PW: " + newPW);
+
+  if (oldPW != initualPW) {
+    Serial.println("Wrong old password!");
+    mqttClient.publish((teamKey + "/esp/change_pw/res").c_str(), "WRONG_OLD_PASSWORD");
+    changeFail("Sai mat khau cu", "");
+    return;
+  }
+
+  initualPW = newPW;
+  Serial.println("Password changed successfully!");
+  mqttClient.publish((teamKey + "/esp/change_pw/res").c_str(), "SUCCESS");
+  changeSuccess();
+}
+
+
 
 void setup() {
   Serial.begin(115200);
@@ -131,28 +216,36 @@ void setup() {
   pinMode(red, OUTPUT);
   pinMode(greenLedAndRelay, OUTPUT);
 
+  SPI.begin(18, 19, 23);      // SCK=18, MISO=19, MOSI=23
+  mfrc522.PCD_Init();
+  Serial.println("Quet the RC522...");
+
+  wifiConnect();
+  mqttClient.setServer(mqtt_server, port);
+  mqttClient.setCallback(callback);
+  mqttClient.setKeepAlive( 90 );
+  
   pinMode(echo, INPUT);
   pinMode(trig, OUTPUT);
-
-  // wifiConnect();
-  // mqttClient.setServer(mqtt_server, port);
-  // mqttClient.setCallback(callback);
-  // mqttClient.setKeepAlive( 90 );
 
   lcd.init();
   lcd.backlight();
   showHomeScreen();
+
 }
 
 void loop() {
-  // if (WiFi.status() != WL_CONNECTED) {
-  //   Serial.print("Reconnecting to WiFi");
-  //   wifiConnect();
-  // }
-  // if(!mqttClient.connected()) {
-  //   mqttConnect();
-  // }
-  // mqttClient.loop();
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.print("Reconnecting to WiFi");
+    wifiConnect();
+  }
+  if(!mqttClient.connected()) {
+    mqttConnect();
+  }
+  mqttClient.loop();
+
+  checkRFID();
+
   char key = keypad.getKey();
   KeyState state = keypad.getState();   // <<=== LẤY TRẠNG THÁI PHÍM
 
@@ -361,6 +454,8 @@ void lockDoor() {
 }
 
 void printAndOpenDoor(){
+  //relay, servo
+  nfcFailed = 0;
   lcd.clear();
   lcd.setCursor(4,0);
   lcd.print("CUA MO");
