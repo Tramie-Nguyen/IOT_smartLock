@@ -2,7 +2,7 @@
 
 #include <LiquidCrystal_I2C.h>
 #include <Keypad.h>
-#include <ESP32Servo.h>
+
 #include <WiFi.h>
 #include <PubSubClient.h>
 
@@ -57,16 +57,23 @@ void callback(char* topic, byte* message, unsigned int length) {
 
 }
 
-#define servoPin 33
-Servo servo;
 
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 
 int red = 16;
 int wrongPw = 0;
-int green = 23;
-int relay = 27;
+int greenLedAndRelay = 23;
 bool isDoorLocked = false;
+
+// các biến giám sát khoảng cách
+int trig = 27;
+int echo = 32;
+bool isSomeoneDetected = false;         
+unsigned long nearStartTime = 0;        
+bool isNear = false;    
+
+const int NEAR_THRESHOLD = 20;         
+const unsigned long NEAR_DURATION = 5000;
 
 // các biến quản lý chức năng đổi mật khẩu
 unsigned long keyPressStart = 0;
@@ -75,18 +82,18 @@ bool isHoldingHash = false;
 
 // quản lý keypad
 const byte ROWS = 4;
-const byte COLS = 4;
+const byte COLS = 3;
 
 char keys[ROWS][COLS] =
 {
-  {'1', '2', '3', 'A'},
-  {'4', '5', '6', 'B'},
-  {'7', '8', '9', 'C'},
-  {'*', '0', '#', 'D'},
+  {'1', '2', '3'},
+  {'4', '5', '6'},
+  {'7', '8', '9'},
+  {'*', '0', '#'},
 };
 
 byte rowPins[ROWS] = {17, 15, 14, 25};
-byte colPins[COLS] = {26, 4, 2, 32};
+byte colPins[COLS] = {26, 4, 2};
 String initualPW = "123456";
 String currentInput = "";
 bool isEnteringDoorPassword = false;
@@ -109,15 +116,15 @@ void setup() {
   Serial.begin(115200);
   Serial.println("--- KHOI DONG HE THONG ---");
   pinMode(red, OUTPUT);
-  pinMode(green, OUTPUT);
-  pinMode(relay, OUTPUT);
+  pinMode(greenLedAndRelay, OUTPUT);
 
   // wifiConnect();
   // mqttClient.setServer(mqtt_server, port);
   // mqttClient.setCallback(callback);
   // mqttClient.setKeepAlive( 90 );
-
-  servo.attach(servoPin);
+  
+  pinMode(echo, INPUT);
+  pinMode(trig, OUTPUT);
 
   lcd.init();
   lcd.backlight();
@@ -347,13 +354,9 @@ void printAndOpenDoor(){
   lcd.print("CUA MO");
   lcd.setCursor(2,1);
   lcd.print("THANH CONG!");
-  digitalWrite(green, HIGH);
-  servo.write(90);
-  digitalWrite(relay, HIGH);
+  digitalWrite(greenLedAndRelay, HIGH);
   delay(3000);
-  servo.write(0);
-  digitalWrite(green, LOW);
-  digitalWrite(relay, LOW);
+  digitalWrite(greenLedAndRelay, LOW);
   wrongPw = 0;
   showHomeScreen();
 }
@@ -364,11 +367,57 @@ void unlockFromApp() {
   // lcd.clear();
   // lcd.setCursor(0, 0);
   // lcd.print("MO KHOA BANG APP");
-  // digitalWrite(green, HIGH);
+  // digitalWrite(greenLedAndRelay, HIGH);
   // delay(1000);
-  // digitalWrite(green, LOW);
+  // digitalWrite(greenLedAndRelay, LOW);
   // showHomeScreen();
 }
+
+int getDistanceCm(){
+  digitalWrite(trig, LOW);
+  delayMicroseconds(2);
+  digitalWrite(trig, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trig, LOW);
+
+  int getTime = pulseIn(echo, HIGH);
+  int distance = 0.034 * getTime  / 2;
+  return distance;
+}
+
+
+void updateDistanceWatcher() {
+  // Nếu đang có thao tác → không truy cập logic này
+  if (isEnteringDoorPassword || isHoldingHash) {
+    isNear = false;
+    nearStartTime = 0;
+    return;
+  }
+
+  int d = getDistanceCm();
+
+  // Nếu có người gần hơn ngưỡng
+  if (d > 0 && d < NEAR_THRESHOLD) {
+    if (!isNear) {
+      isNear = true;
+      nearStartTime = millis();  // bắt đầu tính giờ
+    } else {
+      // Đã trong trạng thái gần → kiểm tra đủ 5s chưa
+      if (!isSomeoneDetected && millis() - nearStartTime >= NEAR_DURATION) {
+        isSomeoneDetected = true;
+        Serial.println("Phat hien nguoi dung truoc cua !");
+        
+        // gửi tín hiệu topic cho MQTT
+      }
+    }
+  }
+  else {
+    // Không gần nữa → reset
+    isNear = false;
+    nearStartTime = 0;
+  }
+}
+
 
 void changeFail(String first, String second) {
   lcd.clear();
@@ -388,14 +437,11 @@ void changeSuccess() {
   lcd.print("DOI MAT KHAU");
   lcd.setCursor(0,1);
   lcd.print("THANH CONG");
-  digitalWrite(green, HIGH);
   delay(1500);
-  digitalWrite(green, LOW);
   showHomeScreen();
 }
 
 void showHomeScreen() {
-  servo.write(0);
   lcd.clear();
   lcd.setCursor(3, 0);
   lcd.print("KHOA CUA");
