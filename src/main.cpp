@@ -79,7 +79,19 @@ LiquidCrystal_I2C lcd(0x27, 16, 2);
 
 int red = 15;
 int wrongPw = 0;
-int greenLedAndRelay = 23;
+int greenLedAndRelay = 23; //dư chân 27
+
+// --- GIÁM SÁT KHOẢNG CÁCH ---
+int trig = 27;
+int echo = 32;
+bool isSomeoneDetected = false;         
+unsigned long nearStartTime = 0;        
+bool isNear = false;                    
+
+const int NEAR_THRESHOLD = 20;         
+const unsigned long NEAR_DURATION = 5000;
+
+// cờ check cửa có bị khóa do người dùng nhập sai 5 lần hay không
 bool isDoorLocked = false;
 int nfcFailed = 0;
 
@@ -342,7 +354,7 @@ void handleChangePw() {
 
   lcd.clear();
   lcd.setCursor(0,0);
-  lcd.print("Nhap mat khau moi:");
+  lcd.print("Nhap mk moi:");
   lcd.setCursor(0,1);
   lcd.print(">");
 
@@ -456,18 +468,6 @@ void printAndOpenDoor(){
   showHomeScreen();
 }
 
-void unlockFromApp() {
-  // isDoorLocked = false;
-  // wrongPw = 0;
-  // lcd.clear();
-  // lcd.setCursor(0, 0);
-  // lcd.print("MO KHOA BANG APP");
-  // digitalWrite(greenLedAndRelay, HIGH);
-  // delay(1000);
-  // digitalWrite(greenLedAndRelay, LOW);
-  // showHomeScreen();
-}
-
 int getDistanceCm(){
   digitalWrite(trig, LOW);
   delayMicroseconds(2);
@@ -479,7 +479,6 @@ int getDistanceCm(){
   int distance = 0.034 * getTime  / 2;
   return distance;
 }
-
 
 void updateDistanceWatcher() {
   // Nếu đang có thao tác → không truy cập logic này
