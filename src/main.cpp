@@ -58,11 +58,24 @@ void callback(char* topic, byte* message, unsigned int length) {
 }
 
 
+
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 
 int red = 16;
 int wrongPw = 0;
-int greenLedAndRelay = 23;
+int greenLedAndRelay = 23; //dư chân 27
+
+// --- GIÁM SÁT KHOẢNG CÁCH ---
+int trig = 27;
+int echo = 32;
+bool isSomeoneDetected = false;         
+unsigned long nearStartTime = 0;        
+bool isNear = false;                    
+
+const int NEAR_THRESHOLD = 20;         
+const unsigned long NEAR_DURATION = 5000;
+
+// cờ check cửa có bị khóa do người dùng nhập sai 5 lần hay không
 bool isDoorLocked = false;
 
 // các biến giám sát khoảng cách
@@ -118,13 +131,13 @@ void setup() {
   pinMode(red, OUTPUT);
   pinMode(greenLedAndRelay, OUTPUT);
 
+  pinMode(echo, INPUT);
+  pinMode(trig, OUTPUT);
+
   // wifiConnect();
   // mqttClient.setServer(mqtt_server, port);
   // mqttClient.setCallback(callback);
   // mqttClient.setKeepAlive( 90 );
-  
-  pinMode(echo, INPUT);
-  pinMode(trig, OUTPUT);
 
   lcd.init();
   lcd.backlight();
@@ -248,7 +261,7 @@ void handleChangePw() {
 
   lcd.clear();
   lcd.setCursor(0,0);
-  lcd.print("Nhap mat khau moi:");
+  lcd.print("Nhap mk moi:");
   lcd.setCursor(0,1);
   lcd.print(">");
 
@@ -348,7 +361,6 @@ void lockDoor() {
 }
 
 void printAndOpenDoor(){
-  //relay, servo
   lcd.clear();
   lcd.setCursor(4,0);
   lcd.print("CUA MO");
@@ -359,18 +371,6 @@ void printAndOpenDoor(){
   digitalWrite(greenLedAndRelay, LOW);
   wrongPw = 0;
   showHomeScreen();
-}
-
-void unlockFromApp() {
-  // isDoorLocked = false;
-  // wrongPw = 0;
-  // lcd.clear();
-  // lcd.setCursor(0, 0);
-  // lcd.print("MO KHOA BANG APP");
-  // digitalWrite(greenLedAndRelay, HIGH);
-  // delay(1000);
-  // digitalWrite(greenLedAndRelay, LOW);
-  // showHomeScreen();
 }
 
 int getDistanceCm(){
@@ -384,7 +384,6 @@ int getDistanceCm(){
   int distance = 0.034 * getTime  / 2;
   return distance;
 }
-
 
 void updateDistanceWatcher() {
   // Nếu đang có thao tác → không truy cập logic này
