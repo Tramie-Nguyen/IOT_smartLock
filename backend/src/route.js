@@ -1,8 +1,8 @@
-const express = require("express");
+import express from "express";
 const router = express.Router();
 
-const { changeLockPassword } = require("./controller.js");
+import { changeLockPassword } from "./controller.js";
 
 router.post("/change-lock-password", changeLockPassword);
 
-module.exports = router;
+export default router;

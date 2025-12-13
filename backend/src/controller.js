@@ -1,5 +1,33 @@
 import { publishToEsp } from "./mqtt.js";
+import axios from "axios";
+import qs from "qs";
 
+const pushNotification = async (message) => {
+  const payload = {
+    t: "Smart Lock Alert",
+    d: 'a',
+    m: message,
+    s: 1,
+    v: 2,
+    k: process.env.PUSHSAFER_KEY
+  };
+
+  try {
+    const response = await axios.post(
+      "https://www.pushsafer.com/api",
+      qs.stringify(payload), // convert to x-www-form-urlencoded
+      {
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded"
+        }
+      }
+    );
+
+    console.log("Push sent:", response.data);
+  } catch (err) {
+    console.error("Push failed:", err.response?.data || err);
+  }
+};
 const changeLockPassword = (req, res) => {
     try {
         const { oldLockPassword, newLockPassword } = req.body;
@@ -23,4 +51,4 @@ const changeLockPassword = (req, res) => {
     }
 };
 
-export { changeLockPassword };
+export { changeLockPassword, pushNotification };

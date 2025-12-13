@@ -87,6 +87,7 @@ int wrongPw = 0;
 int green = 2; 
 int relay = 14;
 bool isDoorLocked = false;
+int nfcFailed = 0;
 
 // các biến quản lý chức năng đổi mật khẩu
 unsigned long keyPressStart = 0;
@@ -145,6 +146,11 @@ void checkRFID() {
     printAndOpenDoor();
   } else {
     Serial.println("The khong hop le!");
+    nfcFailed += 1;
+    if(nfcFailed >= 5) {
+      Serial.println("NFC sai qua 5 lan");
+      mqttClient.publish((teamKey + "/esp/nfc-failed").c_str(), String(nfcFailed).c_str());
+    }
     digitalWrite(red, HIGH);
     delay(500);
     digitalWrite(red, LOW);
@@ -163,7 +169,7 @@ void handleChangePWFromWeb(String msg) {
 
   if (error) {
     Serial.println("JSON parse FAILED");
-    mqttClient.publish((teamKey + "/esp/change_pw/res").c_str(), "JSON_ERROR");
+    Serial.println("JSON parse FAILED");
     return;
   }
 
@@ -433,6 +439,7 @@ void lockDoor() {
 
 void printAndOpenDoor(){
   //relay, servo
+  nfcFailed = 0;
   lcd.clear();
   lcd.setCursor(4,0);
   lcd.print("CUA MO");
