@@ -27,7 +27,7 @@ const Home = () => {
   const fetchInitialStatus = useCallback(async () => {
     try {
       const logsRef = collection(db, "logs");
-      const q = query(logsRef, orderBy("timestamp", "desc"), limit(1));
+      const q = query(logsRef, orderBy("timestamp", "desc"), limit(1)); // get 1 recent log for state
       const snapshot = await getDocs(q);
 
       if (!snapshot.empty) {
@@ -62,7 +62,7 @@ const Home = () => {
   const fetchRecentActivity = useCallback(async () => {
     try {
       const logsRef = collection(db, "logs");
-      const q = query(logsRef, orderBy("timestamp", "desc"), limit(4));
+      const q = query(logsRef, orderBy("timestamp", "desc"), limit(4)); // get 4 recent logs
       const snapshot = await getDocs(q);
 
       const activities = snapshot.docs.map((doc) => {

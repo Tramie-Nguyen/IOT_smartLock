@@ -74,19 +74,6 @@ bool isEnteringDoorPassword = false;
 
 Keypad keypad = Keypad(makeKeymap(keys), rowPins, colPins, ROWS, COLS);
 
-// PROTOTYPE
-String readPasswordFromKeypad();
-void handlePasswordCheck(String password);
-void lockDoor();
-void unlockFromApp();
-void handleChangePw();
-void changeFail(String first, String second);
-void changeSuccess();
-void showHomeScreen();
-void printAndOpenDoor();
-void updateDistanceWatcher();
-int getDistanceCm();
-
 void wifiConnect() {
   WiFi.begin(ssid, password);
   while (WiFi.status() != WL_CONNECTED) {
@@ -372,6 +359,7 @@ void handleChangePw() {
   }
 
   initualPW = newPw;
+  // mqttClient.publish((teamKey + "/esp/keypad-changePw").c_str(), initialPW.c_str());
   changeSuccess();
 }
 
