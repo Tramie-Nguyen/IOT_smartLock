@@ -6,8 +6,12 @@ import dotenv from "dotenv";
 import router from "./route.js";
 import mqttClient from "./mqtt.js";
 import initSocket from "./socket.js";
+import connectDatabase from "./database.js";
 
 dotenv.config();
+
+// Connect to MongoDB
+connectDatabase();
 
 const app = express();
 app.use(cors());

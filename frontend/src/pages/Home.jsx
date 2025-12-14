@@ -1,15 +1,23 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Wifi, WifiOff, Lock, Unlock, History, Bell, Settings, LogOut } from 'lucide-react';
+import authService from '../services/authService';
 
 const Home = () => {
   const navigate = useNavigate();
   const [isLocked, setIsLocked] = useState(true);
   const [isConnected] = useState(true);
   const [network] = useState('HomeNetwork_5G');
+  const [user, setUser] = useState(null);
+
+  useEffect(() => {
+    // Get current user info
+    const currentUser = authService.getCurrentUser();
+    setUser(currentUser);
+  }, []);
 
   const handleLogout = () => {
-    // TODO: Add logout logic here
+    authService.logout();
     navigate('/login');
   };
 
@@ -28,7 +36,12 @@ const Home = () => {
               <div className="w-10 h-10 bg-indigo-600 rounded-lg flex items-center justify-center">
                 <Lock className="w-6 h-6 text-white" />
               </div>
-              <h1 className="text-xl font-bold text-gray-900">Smart Door Lock</h1>
+              <div>
+                <h1 className="text-xl font-bold text-gray-900">Smart Door Lock</h1>
+                {user && (
+                  <p className="text-sm text-gray-500">Welcome back, {user.fullName}</p>
+                )}
+              </div>
             </div>
             
             <nav className="flex items-center gap-6">
