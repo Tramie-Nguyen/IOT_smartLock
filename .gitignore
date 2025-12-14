@@ -8,3 +8,6 @@ settings.json
 .config*
 mosquitto.log
 mosquitto.db
+node_modules
+
+backend/serviceAccountKey.json
