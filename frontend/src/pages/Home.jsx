@@ -11,7 +11,7 @@ import {
   LogOut,
 } from "lucide-react";
 import { io } from "socket.io-client";
-import { db } from "../../firebase-config"; // Adjust path as needed
+import { db } from "../firebase-config";
 import { collection, query, orderBy, limit, getDocs } from "firebase/firestore";
 
 const Home = () => {
