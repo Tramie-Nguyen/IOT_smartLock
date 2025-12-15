@@ -246,11 +246,11 @@ const Home = () => {
 
       if (isLocked) {
         // Unlock the door
-        const response = await authService.api.post("/unlock-door");
+        const response = await authService.api.post("/unlock");
         console.log("Unlock response:", response.data);
       } else {
         // Lock the door
-        const response = await authService.api.post("/lock-door");
+        const response = await authService.api.post("/lock");
         console.log("Lock response:", response.data);
       }
     } catch (error) {
