@@ -42,13 +42,24 @@ const Home = () => {
 
         setLastChanged(timeString);
 
-        // Set door status based on action
+        // Set door status based on action and time
         if (latestLog.action === "Unlocked") {
-          setIsLocked(false);
-          // Auto-lock after 3 seconds
-          setTimeout(() => {
+          // Check if the unlock event happened within the last 3 seconds
+          const now = new Date();
+          const logTime = new Date(latestLog.timestamp.seconds * 1000);
+          const timeDiffInSeconds = (now - logTime) / 1000;
+
+          if (timeDiffInSeconds < 3) {
+            // Recent unlock - show as unlocked and auto-lock after remaining time
+            setIsLocked(false);
+            const remainingTime = (3 - timeDiffInSeconds) * 1000;
+            setTimeout(() => {
+              setIsLocked(true);
+            }, remainingTime);
+          } else {
+            // Old unlock - should be locked by now
             setIsLocked(true);
-          }, 3000);
+          }
         } else {
           setIsLocked(true);
         }
