@@ -20,8 +20,11 @@ const Home = () => {
   const [isConnected] = useState(true);
   const [network] = useState("HomeNetwork_5G");
   const [lastChanged, setLastChanged] = useState("Today at 2:45 PM");
+  const [lastAction, setLastAction] = useState("locked"); // Thêm state cho hành động cuối cùng
   const [recentActivity, setRecentActivity] = useState([]);
   const [socket, setSocket] = useState(null);
+
+  // --- Logic Fetch Dữ liệu từ Firebase ---
 
   // Fetch initial door status from Firebase (latest log)
   const fetchInitialStatus = useCallback(async () => {
@@ -32,6 +35,8 @@ const Home = () => {
 
       if (!snapshot.empty) {
         const latestLog = snapshot.docs[0].data();
+
+        // --- Chuyển đổi Timestamp thành Date để định dạng ---
         const date = new Date(latestLog.timestamp.seconds * 1000);
         const timeString = date.toLocaleString("vi-VN", {
           month: "short",
@@ -41,6 +46,13 @@ const Home = () => {
         });
 
         setLastChanged(timeString);
+
+        // Cập nhật lastAction dựa trên log gần nhất (chỉ lấy 'unlocked' hoặc 'locked')
+        const action =
+          latestLog.action === "Unlocked" || latestLog.action === "Locked"
+            ? latestLog.action.toLowerCase()
+            : "locked";
+        setLastAction(action);
 
         // Set door status based on action and time
         if (latestLog.action === "Unlocked") {
@@ -53,6 +65,8 @@ const Home = () => {
             // Recent unlock - show as unlocked and auto-lock after remaining time
             setIsLocked(false);
             const remainingTime = (3 - timeDiffInSeconds) * 1000;
+            // Xóa mọi timeout cũ để tránh xung đột
+            // Note: Cần lưu trữ timeoutId nếu muốn hủy bỏ nó, nhưng giữ nguyên logic hiện tại
             setTimeout(() => {
               setIsLocked(true);
             }, remainingTime);
@@ -61,6 +75,7 @@ const Home = () => {
             setIsLocked(true);
           }
         } else {
+          // Locked, Keypad Failed, NFC Failed, Alert, Loitering -> Locked
           setIsLocked(true);
         }
       }
@@ -73,34 +88,73 @@ const Home = () => {
   const fetchRecentActivity = useCallback(async () => {
     try {
       const logsRef = collection(db, "logs");
-      const q = query(logsRef, orderBy("timestamp", "desc"), limit(4)); // get 4 recent logs
+      // Lấy 4 log gần nhất bất kể action là gì để sau đó lọc trên client
+      const q = query(logsRef, orderBy("timestamp", "desc"), limit(10));
       const snapshot = await getDocs(q);
 
-      const activities = snapshot.docs.map((doc) => {
-        const data = doc.data();
-        const date = new Date(data.timestamp.seconds * 1000);
-        const timeString = date.toLocaleString("vi-VN", {
-          month: "short",
-          day: "numeric",
-          hour: "2-digit",
-          minute: "2-digit",
-        });
+      const activities = snapshot.docs
+        .map((doc) => {
+          const data = doc.data();
 
-        return {
-          action:
-            data.action === "Unlocked"
-              ? `Door Unlocked (${data.method})`
-              : "Door Locked",
-          time: timeString,
-          type: data.action === "Unlocked" ? "unlock" : "lock",
-        };
-      });
+          // Lọc ra các log chỉ có action là Unlocked hoặc Locked
+          if (data.action !== "Unlocked" && data.action !== "Locked") {
+            return null; // Bỏ qua các log Alert/Failed
+          }
+
+          // --- Chuyển đổi Timestamp thành Date để định dạng ---
+          const date = new Date(data.timestamp.seconds * 1000);
+          const timeString = date.toLocaleString("vi-VN", {
+            month: "short",
+            day: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          });
+
+          let actionText = "";
+          let type = "";
+
+          if (data.action === "Unlocked") {
+            actionText = `Door Unlocked (${data.method || "App"})`;
+            type = "unlock";
+          } else if (data.action === "Locked") {
+            // Logic tạm thời: log Locked trong DB là từ auto-lock hoặc app manual lock
+            actionText = `Door Locked (${data.method || "Auto-lock"})`;
+            type = "lock";
+          }
+
+          return {
+            action: actionText,
+            time: timeString,
+            type: type,
+          };
+        })
+        .filter(Boolean) // Lọc bỏ các giá trị 'null'
+        .slice(0, 4); // Chỉ giữ lại 4 hoạt động gần nhất sau khi lọc
 
       setRecentActivity(activities);
     } catch (error) {
       console.error("Error fetching recent activity:", error);
     }
   }, []);
+
+  // --- Logic Socket.IO và Control ---
+
+  // Handle door unlock with auto-lock after 3 seconds
+  const handleDoorUnlock = (data) => {
+    setIsLocked(false);
+    setLastAction("unlocked"); // Cập nhật lastAction
+
+    // data.timestamp từ backend đã là chuỗi localTime, không cần chuyển đổi
+    setLastChanged(data.timestamp);
+
+    // Refresh recent activity
+    fetchRecentActivity();
+
+    // Auto-lock after 3 seconds
+    setTimeout(() => {
+      setIsLocked(true);
+    }, 3000);
+  };
 
   // Connect to Socket.IO and listen for real-time updates
   useEffect(() => {
@@ -122,18 +176,17 @@ const Home = () => {
       handleDoorUnlock(data);
     });
 
-    newSocket.on("051_428_475/esp/nfc-failed", (data) => {
-      console.log("NFC Failed:", data);
-      setIsLocked(true);
+    // Các sự kiện Alert/Failed vẫn cần refresh activity để đảm bảo FE có thể thấy log Alert (nếu có logic hiển thị khác)
+    newSocket.on("051_428_475/esp/nfc-failed", () => {
+      fetchRecentActivity();
     });
 
-    newSocket.on("051_428_475/esp/keypad-failed", (data) => {
-      console.log("Keypad Failed:", data);
-      setIsLocked(true);
+    newSocket.on("051_428_475/esp/keypad-failed", () => {
+      fetchRecentActivity();
     });
 
-    newSocket.on("051_428_475/esp/loitering-detected", (data) => {
-      console.log("Loitering Detected:", data);
+    newSocket.on("051_428_475/esp/loitering-detected", () => {
+      fetchRecentActivity();
       // Show alert notification
     });
 
@@ -141,20 +194,6 @@ const Home = () => {
       newSocket.disconnect();
     };
   }, [fetchInitialStatus, fetchRecentActivity]);
-
-  // Handle door unlock with auto-lock after 3 seconds
-  const handleDoorUnlock = (data) => {
-    setIsLocked(false);
-    setLastChanged(data.timestamp);
-
-    // Refresh recent activity
-    fetchRecentActivity();
-
-    // Auto-lock after 3 seconds
-    setTimeout(() => {
-      setIsLocked(true);
-    }, 3000);
-  };
 
   const handleLogout = () => {
     if (socket) {
@@ -169,15 +208,38 @@ const Home = () => {
       const topic = isLocked
         ? "051_428_475/app/unlock"
         : "051_428_475/app/lock";
+      // Gửi lệnh lên backend
       socket.emit("publish", { topic, message: "toggle" });
     }
 
+    // Client-side state update for better UX
     if (!isLocked) {
       // Locking manually
       setIsLocked(true);
+      setLastAction("locked"); // Cập nhật lastAction
+      const now = new Date().toLocaleString("vi-VN", {
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+      setLastChanged(now);
+      // Giả định backend sẽ log hành động này, sau đó fetchRecentActivity sẽ được gọi
+      fetchRecentActivity();
     } else {
       // Unlocking manually
       setIsLocked(false);
+      setLastAction("unlocked"); // Cập nhật lastAction
+      const now = new Date().toLocaleString("vi-VN", {
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+      setLastChanged(now);
+      // Giả định backend sẽ log hành động này, sau đó fetchRecentActivity sẽ được gọi
+      fetchRecentActivity();
+
       // Auto-lock after 3 seconds
       setTimeout(() => {
         setIsLocked(true);
@@ -275,7 +337,7 @@ const Home = () => {
                     {lastChanged}
                   </p>
                   <p className="text-sm text-gray-500 mt-1">
-                    Door was {isLocked ? "locked" : "unlocked"}
+                    Door was {lastAction}
                   </p>
                 </div>
                 <div className="w-14 h-14 rounded-xl bg-yellow-100 flex items-center justify-center">
@@ -388,7 +450,7 @@ const Home = () => {
               ))
             ) : (
               <p className="text-center text-gray-500 py-4">
-                No recent activity
+                No recent activity (Only shows Lock/Unlock actions)
               </p>
             )}
           </div>

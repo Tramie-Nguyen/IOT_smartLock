@@ -1,74 +1,138 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   AlertCircle,
   Bell,
   Battery,
-  Lock,
+  Lock, // Giữ lại Lock icon nếu muốn thêm thông báo Door Lock (Locked/Unlocked)
   ArrowLeft,
   Home as HomeIcon,
   X,
 } from "lucide-react";
-import io from "socket.io-client"; // Thư viện Client để kết nối Socket.IO và nhận thông báo thời gian thực từ Backend
+
+// --- Imports từ Firebase ---
+import { db } from "../firebase-config";
+import { collection, query, orderBy, limit, getDocs } from "firebase/firestore";
+
+// Không cần import io từ Socket.IO client vì không dùng Real-time
+// import io from "socket.io-client";
 
 const Notifications = () => {
   const navigate = useNavigate();
-  const [notifications, setNotifications] = useState([
-    {
-      id: 1,
-      type: "doorbell",
-      title: "Doorbell Pressed",
-      message: "Someone pressed your doorbell",
-      time: "Today at 3:15 PM",
-      icon: Bell,
-      severity: "info",
-    },
-    {
-      id: 2,
-      type: "invalid_password",
-      title: "Multiple Failed Attempts",
-      message: "Wrong password entered 5 consecutive times",
-      time: "Today at 2:50 PM",
-      icon: AlertCircle,
-      severity: "warning",
-    },
-    {
-      id: 3,
-      type: "low_battery",
-      title: "Low Battery Warning",
-      message: "Lock battery is below 20%",
-      time: "Today at 1:45 PM",
-      icon: Battery,
-      severity: "alert",
-    },
-    {
-      id: 4,
-      type: "doorbell",
-      title: "Doorbell Pressed",
-      message: "Someone pressed your doorbell",
-      time: "Yesterday at 7:30 PM",
-      icon: Bell,
-      severity: "info",
-    },
-    {
-      id: 5,
-      type: "door_lock",
-      title: "Door Locked",
-      message: "Door was locked by John Doe",
-      time: "Yesterday at 5:15 PM",
-      icon: Lock,
-      severity: "info",
-    },
-  ]);
+  // Khởi tạo notifications rỗng, sẽ được load từ Firebase
+  const [notifications, setNotifications] = useState([]);
 
+  // Hàm chuyển đổi log Firebase thành đối tượng Notification chuẩn
+  const mapLogToNotification = (log) => {
+    const data = log.data();
+
+    // Kiểm tra và xử lý trường timestamp (giả sử là Firebase Timestamp)
+    if (!data.timestamp || typeof data.timestamp.seconds === "undefined") {
+      console.warn("Log missing valid timestamp:", data);
+      return null;
+    }
+
+    const date = new Date(data.timestamp.seconds * 1000);
+    const timeString = date.toLocaleString("vi-VN", {
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+    let type, title, message, icon, severity;
+
+    // Dựa vào topic hoặc action để phân loại thông báo
+    switch (data.topic) {
+      case "051_428_475/esp/nfc-failed":
+        type = "invalid_attempt";
+        title = "Failed Login Attempt (NFC)";
+        message = data.message || "Wrong key/password entered.";
+        icon = AlertCircle;
+        severity = "warning";
+        break;
+      case "051_428_475/esp/keypad-failed":
+        type = "invalid_attempt";
+        title = "Failed Login Attempt (Keypad)";
+        message = data.message || "Wrong key/password entered.";
+        icon = AlertCircle;
+        severity = "warning";
+        break;
+      case "051_428_475/esp/loitering-detected":
+        type = "loitering";
+        title = "Loitering Detected";
+        message =
+          data.message || "A person was detected near the door for too long.";
+        icon = AlertCircle;
+        severity = "alert";
+        break;
+      case "051_428_475/esp/doorbell-pressed":
+        type = "doorbell";
+        title = "Doorbell Pressed";
+        message = data.message || "Someone pressed your doorbell.";
+        icon = Bell;
+        severity = "info";
+        break;
+      case "051_428_475/esp/battery-low":
+        type = "low_battery";
+        title = "Low Battery Warning";
+        message =
+          data.message ||
+          "Lock battery is below 20%. Please replace or recharge.";
+        icon = Battery;
+        severity = "alert";
+        break;
+      default:
+        // Bỏ qua các log khác (như Unlocked/Locked thông thường)
+        return null;
+    }
+
+    return {
+      id: log.id, // Sử dụng ID document của Firestore
+      type,
+      title,
+      message,
+      time: timeString,
+      icon,
+      severity,
+    };
+  };
+
+  const fetchNotifications = useCallback(async () => {
+    try {
+      const logsRef = collection(db, "logs");
+      // Lấy 20 log gần nhất
+      const q = query(logsRef, orderBy("timestamp", "desc"), limit(20));
+      const snapshot = await getDocs(q);
+
+      const fetchedNotifications = snapshot.docs
+        .map(mapLogToNotification)
+        .filter(Boolean); // Lọc bỏ các giá trị null (các log không phải thông báo)
+
+      setNotifications(fetchedNotifications);
+    } catch (error) {
+      console.error("Error fetching notifications:", error);
+    }
+  }, []);
+
+  useEffect(() => {
+    // Chỉ gọi hàm fetch một lần khi component mount
+    fetchNotifications();
+
+    // Nếu muốn tự động tải lại sau một khoảng thời gian (VD: 60s)
+    // const intervalId = setInterval(fetchNotifications, 60000);
+    // return () => clearInterval(intervalId);
+  }, [fetchNotifications]);
+
+  // --- Các hàm UI ---
   const getSeverityColor = (severity) => {
     switch (severity) {
       case "warning":
-        return "bg-yellow-50 border-yellow-200";
+        return "bg-yellow-50 border-yellow-200 border-yellow-600";
       case "alert":
-        return "bg-red-50 border-red-200";
+        return "bg-red-50 border-red-200 border-red-600";
       default:
-        return "bg-blue-50 border-blue-200";
+        return "bg-blue-50 border-blue-200 border-blue-600";
     }
   };
 
@@ -95,6 +159,7 @@ const Notifications = () => {
   };
 
   const handleClearAll = () => {
+    // Lưu ý: Hàm này chỉ xóa trên Frontend. Dữ liệu vẫn còn trên Firebase.
     setNotifications([]);
   };
 
@@ -176,6 +241,8 @@ const Notifications = () => {
           <div className="space-y-3">
             {notifications.map((notif) => {
               const Icon = notif.icon;
+              if (!Icon) return null;
+
               return (
                 <div
                   key={notif.id}

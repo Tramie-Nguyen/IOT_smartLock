@@ -1,17 +1,25 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Eye, EyeOff, Settings as SettingsIcon, ArrowLeft, Home as HomeIcon, Lock, User } from 'lucide-react';
-import { socket } from '../socket';
-import axios from 'axios';
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import {
+  Eye,
+  EyeOff,
+  Settings as SettingsIcon,
+  ArrowLeft,
+  Home as HomeIcon,
+  Lock,
+  User,
+} from "lucide-react";
+import { socket } from "../socket";
+import axios from "axios";
 
 const Settings = () => {
   const navigate = useNavigate();
-  const [oldAccountPassword, setOldAccountPassword] = useState('');
-  const [oldLockPassword, setOldLockPassword] = useState('');
-  const [accountPassword, setAccountPassword] = useState('');
-  const [accountPasswordConfirm, setAccountPasswordConfirm] = useState('');
-  const [lockPassword, setLockPassword] = useState('');
-  const [lockPasswordConfirm, setLockPasswordConfirm] = useState('');
+  const [oldAccountPassword, setOldAccountPassword] = useState("");
+  const [oldLockPassword, setOldLockPassword] = useState("");
+  const [accountPassword, setAccountPassword] = useState("");
+  const [accountPasswordConfirm, setAccountPasswordConfirm] = useState("");
+  const [lockPassword, setLockPassword] = useState("");
+  const [lockPasswordConfirm, setLockPasswordConfirm] = useState("");
   const [showAccountPass, setShowAccountPass] = useState(false);
   const [showAccountPassConfirm, setShowAccountPassConfirm] = useState(false);
   const [showLockPass, setShowLockPass] = useState(false);
@@ -23,78 +31,85 @@ const Settings = () => {
   useEffect(() => {
     const handleLockPasswordResponse = (data) => {
       const message = data.message;
-      
-      if (message === 'JSON_ERROR') {
-        alert('Error: Invalid data format');
-      } else if (message === 'WRONG_OLD_PASSWORD') {
-        alert('Error: Wrong old password');
-      } else if (message === 'SUCCESS') {
-        alert('Lock password updated successfully');
-        setOldLockPassword('');
-        setLockPassword('');
-        setLockPasswordConfirm('');
+
+      if (message === "JSON_ERROR") {
+        alert("Error: Invalid data format");
+      } else if (message === "WRONG_OLD_PASSWORD") {
+        alert("Error: Wrong old password");
+      } else if (message === "SUCCESS") {
+        alert("Lock password updated successfully");
+        setOldLockPassword("");
+        setLockPassword("");
+        setLockPasswordConfirm("");
         setShowLockPass(false);
         setShowLockPassConfirm(false);
       }
     };
 
-    socket.on('051_428_475/esp/change_pw/res', handleLockPasswordResponse);
+    socket.on("051_428_475/esp/change_pw/res", handleLockPasswordResponse);
 
     return () => {
-      socket.off('051_428_475/esp/change_pw/res', handleLockPasswordResponse);
+      socket.off("051_428_475/esp/change_pw/res", handleLockPasswordResponse);
     };
   }, []);
 
   const handleAccountPasswordChange = (e) => {
     e.preventDefault();
-    
+
     if (accountPassword !== accountPasswordConfirm) {
-      alert('Passwords do not match');
+      alert("Passwords do not match");
       return;
     }
     if (accountPassword.length < 8) {
-      alert('Password must be at least 8 characters');
+      alert("Password must be at least 8 characters");
       return;
     }
-    
+
     // TODO: Add API call to update password
-    alert('Account password updated successfully');
-    setAccountPassword('');
-    setAccountPasswordConfirm('');
+    alert("Account password updated successfully");
+    setAccountPassword("");
+    setAccountPasswordConfirm("");
     setShowAccountPass(false);
     setShowAccountPassConfirm(false);
   };
 
   const handleLockPasswordChange = async (e) => {
     e.preventDefault();
-    
+
     if (lockPassword !== lockPasswordConfirm) {
-      alert('Lock passwords do not match');
+      alert("Lock passwords do not match");
       return;
     }
     if (lockPassword.length < 4 || lockPassword.length > 6) {
-      alert('Lock password must be 4-6 digits');
+      alert("Lock password must be 4-6 digits");
       return;
     }
     if (!/^\d+$/.test(lockPassword)) {
-      alert('Lock password must contain only numbers');
+      alert("Lock password must contain only numbers");
       return;
     }
-    
+
     try {
       // Gọi API để đổi mật khẩu khóa
-      const response = await axios.post('http://localhost:3000/api/change-lock-password', {
-        oldLockPassword: oldLockPassword,
-        newLockPassword: lockPassword
-      });
-      
-      alert('Lock password change request sent. Waiting for ESP response...');
+      const response = await axios.post(
+        "http://localhost:3000/api/change-lock-password",
+        {
+          oldLockPassword: oldLockPassword,
+          newLockPassword: lockPassword,
+        }
+      );
+
+      alert("Lock password change request sent. Waiting for ESP response...");
     } catch (error) {
-      console.error('Error changing lock password:', error);
-      if (error.response && error.response.data && error.response.data.message) {
+      console.error("Error changing lock password:", error);
+      if (
+        error.response &&
+        error.response.data &&
+        error.response.data.message
+      ) {
         alert(`Error: ${error.response.data.message}`);
       } else {
-        alert('Error: Could not connect to server');
+        alert("Error: Could not connect to server");
       }
     }
   };
@@ -108,7 +123,7 @@ const Settings = () => {
             {/* <- + icon, Settings (left) */}
             <div className="flex items-center gap-4">
               <button
-                onClick={() => navigate('/home')}
+                onClick={() => navigate("/home")}
                 className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
               >
                 <ArrowLeft className="w-6 h-6 text-gray-600" />
@@ -122,7 +137,7 @@ const Settings = () => {
             </div>
             {/* Home button (right) */}
             <button
-              onClick={() => navigate('/home')}
+              onClick={() => navigate("/home")}
               className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
             >
               <HomeIcon className="w-5 h-5" />
@@ -137,13 +152,17 @@ const Settings = () => {
         <div className="space-y-6">
           {/* Account Password Section */}
           <div className="bg-white rounded-2xl shadow-lg p-6">
-            <div className="flex items-center gap-3 mb-6"> {/* Icon and Title */}
+            <div className="flex items-center gap-3 mb-6">
+              {" "}
+              {/* Icon and Title */}
               <div className="w-12 h-12 rounded-lg bg-blue-100 flex items-center justify-center">
                 <User className="w-6 h-6 text-blue-600" />
               </div>
-              <h2 className="text-xl font-bold text-gray-900">Change Account Password</h2>
+              <h2 className="text-xl font-bold text-gray-900">
+                Change Account Password
+              </h2>
             </div>
-            
+
             <form onSubmit={handleAccountPasswordChange} className="space-y-4">
               {/* Old Password Field */}
               <div>
@@ -152,7 +171,7 @@ const Settings = () => {
                 </label>
                 <div className="relative">
                   <input
-                    type={showOldAccountPass ? 'text' : 'password'}
+                    type={showOldAccountPass ? "text" : "password"}
                     value={oldAccountPassword}
                     onChange={(e) => setOldAccountPassword(e.target.value)}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-200"
@@ -164,7 +183,11 @@ const Settings = () => {
                     onClick={() => setShowOldAccountPass(!showOldAccountPass)}
                     className="absolute right-3 top-3.5 text-gray-400 hover:text-gray-600"
                   >
-                    {showOldAccountPass ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    {showOldAccountPass ? (
+                      <EyeOff className="w-5 h-5" />
+                    ) : (
+                      <Eye className="w-5 h-5" />
+                    )}
                   </button>
                 </div>
               </div>
@@ -175,7 +198,7 @@ const Settings = () => {
                 </label>
                 <div className="relative">
                   <input
-                    type={showAccountPass ? 'text' : 'password'}
+                    type={showAccountPass ? "text" : "password"}
                     value={accountPassword}
                     onChange={(e) => setAccountPassword(e.target.value)}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-200"
@@ -187,7 +210,11 @@ const Settings = () => {
                     onClick={() => setShowAccountPass(!showAccountPass)}
                     className="absolute right-3 top-3.5 text-gray-400 hover:text-gray-600"
                   >
-                    {showAccountPass ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    {showAccountPass ? (
+                      <EyeOff className="w-5 h-5" />
+                    ) : (
+                      <Eye className="w-5 h-5" />
+                    )}
                   </button>
                 </div>
               </div>
@@ -198,7 +225,7 @@ const Settings = () => {
                 </label>
                 <div className="relative">
                   <input
-                    type={showAccountPassConfirm ? 'text' : 'password'}
+                    type={showAccountPassConfirm ? "text" : "password"}
                     value={accountPasswordConfirm}
                     onChange={(e) => setAccountPasswordConfirm(e.target.value)}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-200"
@@ -207,10 +234,16 @@ const Settings = () => {
                   />
                   <button
                     type="button"
-                    onClick={() => setShowAccountPassConfirm(!showAccountPassConfirm)}
+                    onClick={() =>
+                      setShowAccountPassConfirm(!showAccountPassConfirm)
+                    }
                     className="absolute right-3 top-3.5 text-gray-400 hover:text-gray-600"
                   >
-                    {showAccountPassConfirm ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    {showAccountPassConfirm ? (
+                      <EyeOff className="w-5 h-5" />
+                    ) : (
+                      <Eye className="w-5 h-5" />
+                    )}
                   </button>
                 </div>
               </div>
@@ -226,13 +259,17 @@ const Settings = () => {
 
           {/* Lock Password Section */}
           <div className="bg-white rounded-2xl shadow-lg p-6">
-            <div className="flex items-center gap-3 mb-6"> {/* Icon and Title */}
+            <div className="flex items-center gap-3 mb-6">
+              {" "}
+              {/* Icon and Title */}
               <div className="w-12 h-12 rounded-lg bg-green-100 flex items-center justify-center">
                 <Lock className="w-6 h-6 text-green-600" />
               </div>
-              <h2 className="text-xl font-bold text-gray-900">Change Door Lock Password</h2>
+              <h2 className="text-xl font-bold text-gray-900">
+                Change Door Lock Password
+              </h2>
             </div>
-            
+
             <form onSubmit={handleLockPasswordChange} className="space-y-4">
               {/* Old Lock Password Field */}
               <div>
@@ -241,7 +278,7 @@ const Settings = () => {
                 </label>
                 <div className="relative">
                   <input
-                    type={showOldLockPass ? 'text' : 'password'}
+                    type={showOldLockPass ? "text" : "password"}
                     value={oldLockPassword}
                     onChange={(e) => setOldLockPassword(e.target.value)}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition duration-200"
@@ -255,7 +292,11 @@ const Settings = () => {
                     onClick={() => setShowOldLockPass(!showOldLockPass)}
                     className="absolute right-3 top-3.5 text-gray-400 hover:text-gray-600"
                   >
-                    {showOldLockPass ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    {showOldLockPass ? (
+                      <EyeOff className="w-5 h-5" />
+                    ) : (
+                      <Eye className="w-5 h-5" />
+                    )}
                   </button>
                 </div>
               </div>
@@ -266,7 +307,7 @@ const Settings = () => {
                 </label>
                 <div className="relative">
                   <input
-                    type={showLockPass ? 'text' : 'password'}
+                    type={showLockPass ? "text" : "password"}
                     value={lockPassword}
                     onChange={(e) => setLockPassword(e.target.value)}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition duration-200"
@@ -280,7 +321,11 @@ const Settings = () => {
                     onClick={() => setShowLockPass(!showLockPass)}
                     className="absolute right-3 top-3.5 text-gray-400 hover:text-gray-600"
                   >
-                    {showLockPass ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    {showLockPass ? (
+                      <EyeOff className="w-5 h-5" />
+                    ) : (
+                      <Eye className="w-5 h-5" />
+                    )}
                   </button>
                 </div>
               </div>
@@ -291,7 +336,7 @@ const Settings = () => {
                 </label>
                 <div className="relative">
                   <input
-                    type={showLockPassConfirm ? 'text' : 'password'}
+                    type={showLockPassConfirm ? "text" : "password"}
                     value={lockPasswordConfirm}
                     onChange={(e) => setLockPasswordConfirm(e.target.value)}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition duration-200"
@@ -305,7 +350,11 @@ const Settings = () => {
                     onClick={() => setShowLockPassConfirm(!showLockPassConfirm)}
                     className="absolute right-3 top-3.5 text-gray-400 hover:text-gray-600"
                   >
-                    {showLockPassConfirm ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    {showLockPassConfirm ? (
+                      <EyeOff className="w-5 h-5" />
+                    ) : (
+                      <Eye className="w-5 h-5" />
+                    )}
                   </button>
                 </div>
               </div>
