@@ -409,7 +409,6 @@ void handlePasswordCheck(String password) {
 
     if (password.length() > 0) {
       wrongPw++;
-      mqttClient.publish((teamKey + "/esp/keypad-failed").c_str(), "FAILED");
     }
     if (wrongPw >= 5) {
       isDoorLocked = true;
