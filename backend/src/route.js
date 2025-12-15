@@ -1,20 +1,30 @@
-import express from "express";
+import express from 'express';
+import { 
+  signup, 
+  signin, 
+  forgotPassword, 
+  resetPassword, 
+  getProfile,
+  lockDoor,
+  unlockDoor,
+  getDoorStatus,
+  changeLockPassword
+} from './controller.js';
+import { protect } from './middleware/auth.js';
+
 const router = express.Router();
 
-import { changeLockPassword, signup, signin, forgotPassword, resetPassword, getProfile, lockDoor, unlockDoor, getDoorStatus } from "./controller.js";
-import { protect } from "./middleware/auth.js";
-
-// Lock management routes
-router.post("/change-lock-password", changeLockPassword);
-router.post("/lock-door", protect, lockDoor);
-router.post("/unlock-door", protect, unlockDoor);
-router.get("/door-status", protect, getDoorStatus);
-
 // Authentication routes
-router.post("/auth/signup", signup);
-router.post("/auth/signin", signin);
-router.post("/auth/forgot-password", forgotPassword);
-router.post("/auth/reset-password", resetPassword);
-router.get("/auth/profile", protect, getProfile);
+router.post('/signup', signup);
+router.post('/signin', signin);
+router.post('/forgot-password', forgotPassword);
+router.post('/reset-password', resetPassword);
+
+// Protected routes (require authentication)
+router.get('/profile', protect, getProfile);
+router.post('/lock', protect, lockDoor);
+router.post('/unlock', protect, unlockDoor);
+router.get('/door-status', protect, getDoorStatus);
+router.post('/change-password', protect, changeLockPassword);
 
 export default router;

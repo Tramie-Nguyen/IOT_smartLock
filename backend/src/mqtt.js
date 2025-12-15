@@ -1,6 +1,6 @@
 import { db, serverTime } from "./firebase.js";
 import mqtt from "mqtt";
-import { pushNotification } from "./controller.js";
+import { pushNotification, sendDoorbellEmail } from "./controller.js";
 
 const mqttUrl = "mqtt://broker.hivemq.com:1883";
 
@@ -118,6 +118,26 @@ mqttClient.on("message", (topic, message) => {
     } catch (error) {
       console.error("Error parsing door action:", error);
     }
+  } else if (topic === "051_428_475/esp/doorbell") {
+    const timestamp = new Date().toLocaleString("vi-VN", {
+      timeZone: "Asia/Ho_Chi_Minh",
+    });
+    
+    logMessage = `Doorbell ringing at ${timestamp}.`;
+    logDetails = { action: "Alert", method: "Doorbell" };
+    
+    console.log("Guest at the door!");
+    console.log("Time:", timestamp);
+    console.log("Message:", msg);
+    
+    // Send push notification
+    pushNotification(logMessage);
+    
+    // Send email notification
+    sendDoorbellEmail(timestamp, msg);
+    
+    // Store log
+    storeLog("DOORBELL", logMessage, topic, logDetails);
   }
 
   // Gửi cho FE qua socket cho các topic khác
@@ -158,6 +178,10 @@ mqttClient.on("connect", () => {
 
   mqttClient.subscribe("051_428_475/esp/loitering-detected", (err) => {
     if (!err) console.log("Subscribed: 051_428_475/esp/loitering-detected");
+  });
+  
+  mqttClient.subscribe("051_428_475/esp/doorbell", (err) => {
+    if (!err) console.log("Subscribed: 051_428_475/esp/doorbell");
   });
 });
 
