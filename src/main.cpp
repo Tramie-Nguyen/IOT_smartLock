@@ -633,7 +633,7 @@ void checkDoorbellButton() {
         
         // Publish MQTT message
         if (mqttClient.connected()) {
-          bool published = mqttClient.publish("home/doorbell", "TRIGGER");
+          bool published = mqttClient.publish(teamKey + "buzzer/doorbell", "TRIGGER");
           if (published) {
             Serial.println("Doorbell MQTT published: TRIGGER");
           } else {
