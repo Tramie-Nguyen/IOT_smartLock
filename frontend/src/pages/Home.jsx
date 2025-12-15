@@ -14,7 +14,6 @@ import { io } from "socket.io-client";
 import { db } from "../firebase-config";
 import { collection, query, orderBy, limit, getDocs } from "firebase/firestore";
 import authService from "../services/authService";
-import { io } from "socket.io-client";
 
 const Home = () => {
   const navigate = useNavigate();
