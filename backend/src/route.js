@@ -1,11 +1,14 @@
 import express from "express";
 const router = express.Router();
 
-import { changeLockPassword, signup, signin, forgotPassword, resetPassword, getProfile } from "./controller.js";
+import { changeLockPassword, signup, signin, forgotPassword, resetPassword, getProfile, lockDoor, unlockDoor, getDoorStatus } from "./controller.js";
 import { protect } from "./middleware/auth.js";
 
 // Lock management routes
 router.post("/change-lock-password", changeLockPassword);
+router.post("/lock-door", protect, lockDoor);
+router.post("/unlock-door", protect, unlockDoor);
+router.get("/door-status", protect, getDoorStatus);
 
 // Authentication routes
 router.post("/auth/signup", signup);

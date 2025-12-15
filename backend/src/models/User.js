@@ -50,18 +50,13 @@ const userSchema = new mongoose.Schema({
 });
 
 // Encrypt password before saving
-userSchema.pre('save', async function(next) {
+userSchema.pre('save', async function() {
   // Only hash the password if it has been modified (or is new)
-  if (!this.isModified('password')) return next();
+  if (!this.isModified('password')) return;
   
-  try {
-    // Hash password with cost of 12
-    const salt = await bcrypt.genSalt(12);
-    this.password = await bcrypt.hash(this.password, salt);
-    next();
-  } catch (error) {
-    next(error);
-  }
+  // Hash password with cost of 12
+  const salt = await bcrypt.genSalt(12);
+  this.password = await bcrypt.hash(this.password, salt);
 });
 
 // Compare password method
@@ -69,19 +64,23 @@ userSchema.methods.comparePassword = async function(candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
 };
 
-// Generate reset password token
-userSchema.methods.generateResetPasswordToken = function() {
-  // Generate token
-  const resetToken = Math.random().toString(36).substring(2, 15) + 
-                     Math.random().toString(36).substring(2, 15);
+// Generate 6-digit verification code for password reset
+userSchema.methods.generateResetPasswordCode = function() {
+  // Generate 6-digit verification code
+  const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
   
-  // Hash and set to resetPasswordToken field
-  this.resetPasswordToken = resetToken;
+  // Set to resetPasswordToken field
+  this.resetPasswordToken = verificationCode;
   
   // Set expire time (10 minutes)
   this.resetPasswordExpire = Date.now() + 10 * 60 * 1000;
   
-  return resetToken;
+  return verificationCode;
+};
+
+// Generate reset password token (legacy method - keeping for compatibility)
+userSchema.methods.generateResetPasswordToken = function() {
+  return this.generateResetPasswordCode();
 };
 
 // Generate email verification token

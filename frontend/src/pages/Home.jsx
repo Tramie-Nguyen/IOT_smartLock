@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Wifi, WifiOff, Lock, Unlock, History, Bell, Settings, LogOut } from 'lucide-react';
 import authService from '../services/authService';
+import { io } from 'socket.io-client';
 
 const Home = () => {
   const navigate = useNavigate();
@@ -9,21 +10,92 @@ const Home = () => {
   const [isConnected] = useState(true);
   const [network] = useState('HomeNetwork_5G');
   const [user, setUser] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [lastChanged, setLastChanged] = useState('Today at 2:45 PM');
+  const [recentActivity, setRecentActivity] = useState([
+    { action: 'Door Locked', time: 'Today at 2:45 PM', type: 'lock' },
+    { action: 'Door Unlocked', time: 'Today at 1:30 PM', type: 'unlock' },
+    { action: 'Door Locked', time: 'Today at 1:25 PM', type: 'lock' },
+    { action: 'Door Unlocked', time: 'Today at 9:15 AM', type: 'unlock' },
+  ]);
 
   useEffect(() => {
     // Get current user info
     const currentUser = authService.getCurrentUser();
     setUser(currentUser);
+
+    // Initialize WebSocket connection
+    const socket = io('http://localhost:3000');
+
+    // Listen for door status updates
+    socket.on('door_status_update', (data) => {
+      console.log('Door status update:', data);
+      setIsLocked(data.isLocked || data.status === 'LOCKED');
+      setLastChanged(new Date().toLocaleString());
+    });
+
+    // Listen for door action completion
+    socket.on('door_action_complete', (data) => {
+      console.log('Door action complete:', data);
+      setIsLoading(false);
+      
+      if (data.success) {
+        setIsLocked(data.action === 'LOCK');
+        const newActivity = {
+          action: data.action === 'LOCK' ? 'Door Locked' : 'Door Unlocked',
+          time: new Date().toLocaleString(),
+          type: data.action === 'LOCK' ? 'lock' : 'unlock'
+        };
+        setRecentActivity(prev => [newActivity, ...prev.slice(0, 3)]);
+        setLastChanged(newActivity.time);
+      }
+    });
+
+    // Get initial door status
+    getDoorStatus();
+
+    return () => {
+      socket.disconnect();
+    };
   }, []);
+
+  const getDoorStatus = async () => {
+    try {
+      await authService.api.get('/door-status');
+    } catch (error) {
+      console.error('Error getting door status:', error);
+    }
+  };
 
   const handleLogout = () => {
     authService.logout();
     navigate('/login');
   };
 
-  const toggleLock = () => {
-    setIsLocked(!isLocked);
-    // TODO: Add lock/unlock logic with backend
+  const toggleLock = async () => {
+    if (isLoading) return;
+
+    try {
+      setIsLoading(true);
+      
+      if (isLocked) {
+        // Unlock the door
+        const response = await authService.api.post('/unlock-door');
+        console.log('Unlock response:', response.data);
+      } else {
+        // Lock the door
+        const response = await authService.api.post('/lock-door');
+        console.log('Lock response:', response.data);
+      }
+    } catch (error) {
+      console.error('Error toggling lock:', error);
+      setIsLoading(false);
+      
+      // Show error message or handle error
+      if (error.response?.status === 401) {
+        navigate('/login');
+      }
+    }
   };
 
   return (
@@ -79,13 +151,18 @@ const Home = () => {
                 
                 <button
                   onClick={toggleLock}
+                  disabled={isLoading}
                   className={`w-40 h-40 rounded-full flex items-center justify-center transition-all transform hover:scale-105 shadow-2xl ${
-                    isLocked
+                    isLoading
+                      ? 'bg-gray-400 cursor-not-allowed'
+                      : isLocked
                       ? 'bg-white/20 backdrop-blur-sm hover:bg-white/30'
                       : 'bg-yellow-400 hover:bg-yellow-500'
                   }`}
                 >
-                  {isLocked ? (
+                  {isLoading ? (
+                    <div className="w-20 h-20 border-4 border-white border-t-transparent rounded-full animate-spin"></div>
+                  ) : isLocked ? (
                     <Lock className="w-20 h-20 text-white" />
                   ) : (
                     <Unlock className="w-20 h-20 text-gray-800" />
@@ -94,10 +171,10 @@ const Home = () => {
 
                 <div className="text-center">
                   <p className="text-2xl font-semibold">
-                    {isLocked ? 'Door Locked' : 'Door Unlocked'}
+                    {isLoading ? 'Processing...' : isLocked ? 'Door Locked' : 'Door Unlocked'}
                   </p>
                   <p className="text-sm text-white/70 mt-2">
-                    Click to {isLocked ? 'unlock' : 'lock'} the door
+                    {isLoading ? 'Please wait...' : `Click to ${isLocked ? 'unlock' : 'lock'} the door`}
                   </p>
                 </div>
               </div>
@@ -111,7 +188,7 @@ const Home = () => {
               <div className="flex items-center justify-between gap-4">
                 <div className="flex-1">
                   <p className="text-sm font-medium text-gray-500">Last Changed</p>
-                  <p className="text-lg font-bold text-gray-900 mt-2">Today at 2:45 PM</p>
+                  <p className="text-lg font-bold text-gray-900 mt-2">{lastChanged}</p>
                   <p className="text-sm text-gray-500 mt-1">Door was {isLocked ? 'locked' : 'unlocked'}</p>
                 </div>
                 <div className="w-14 h-14 rounded-xl bg-yellow-100 flex items-center justify-center">
@@ -183,12 +260,7 @@ const Home = () => {
             </button>
           </div>
           <div className="space-y-4">
-            {[
-              { action: 'Door Locked', time: 'Today at 2:45 PM', type: 'lock' },
-              { action: 'Door Unlocked', time: 'Today at 1:30 PM', type: 'unlock' },
-              { action: 'Door Locked', time: 'Today at 1:25 PM', type: 'lock' },
-              { action: 'Door Unlocked', time: 'Today at 9:15 AM', type: 'unlock' },
-            ].map((item, idx) => (
+            {recentActivity.map((item, idx) => (
               <div 
                 key={idx} 
                 className="flex items-center justify-between py-3 px-4 rounded-lg hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-0"

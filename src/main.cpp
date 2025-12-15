@@ -49,6 +49,20 @@ bool isNear = false;
 const int NEAR_THRESHOLD = 20;         
 const unsigned long NEAR_DURATION = 5000;
 
+// Doorbell variables
+int doorbellButton = 2;  // Button connected to pin 2
+int buzzer = 12;         // Buzzer connected to pin 12
+bool lastDoorbellButtonState = LOW;
+bool doorbellButtonState = LOW;
+unsigned long lastDoorbellDebounceTime = 0;
+const unsigned long DOORBELL_DEBOUNCE_DELAY = 50;
+bool doorbellButtonPressed = false;
+
+// Door lock status
+bool isDoorLockedRemotely = true;  // Track remote lock status
+unsigned long lastStatusSent = 0;
+const unsigned long STATUS_INTERVAL = 30000;  // Send status every 30 seconds
+
 // các biến quản lý chức năng đổi mật khẩu
 unsigned long keyPressStart = 0;
 unsigned long holdTimeRequired = 3000;
@@ -88,6 +102,9 @@ void showHomeScreen();
 void printAndOpenDoor();
 void updateDistanceWatcher();
 int getDistanceCm();
+void checkDoorbellButton();
+void playDingDong();
+void sendDoorStatus();
 
 void wifiConnect() {
   WiFi.begin(ssid, password);
@@ -107,12 +124,23 @@ void mqttConnect() {
 
       //***Subscribe all topic you need***
       mqttClient.subscribe((teamKey + "/esp/change_pw").c_str());
+      mqttClient.subscribe((teamKey + "/esp/door_control").c_str());
     }
     else {
       Serial.print(mqttClient.state());
       Serial.println("try again in 5 seconds");
       delay(5000);
     }
+  }
+}
+
+// Function to send door status to backend
+void sendDoorStatus() {
+  if (mqttClient.connected()) {
+    String status = isDoorLockedRemotely ? "locked" : "unlocked";
+    String message = "{\"status\":\"" + status + "\",\"timestamp\":" + String(millis()) + "}";
+    mqttClient.publish((teamKey + "/esp/door_status").c_str(), message.c_str());
+    Serial.println("Door status sent: " + message);
   }
 }
 
@@ -130,6 +158,27 @@ void callback(char* topic, byte* message, unsigned int length) {
     handleChangePWFromWeb(msg);
   }
 
+  // Handle door control commands
+  if (String(topic) == (teamKey + "/esp/door_control").c_str()) {
+    if (msg == "lock") {
+      isDoorLockedRemotely = true;
+      Serial.println("Door locked remotely");
+      sendDoorStatus();
+      
+      // Optional: Add buzzer feedback for lock
+      tone(buzzer, 800, 200);
+      delay(300);
+      tone(buzzer, 800, 200);
+      
+    } else if (msg == "unlock") {
+      isDoorLockedRemotely = false;
+      Serial.println("Door unlocked remotely");
+      sendDoorStatus();
+      
+      // Optional: Add buzzer feedback for unlock
+      tone(buzzer, 1000, 500);
+    }
+  }
 }
 
 void checkRFID() {
@@ -209,6 +258,11 @@ void setup() {
   pinMode(greenLedAndRelay, OUTPUT);
   pinMode(echo, INPUT);
   pinMode(trig, OUTPUT);
+  
+  // Doorbell setup
+  pinMode(doorbellButton, INPUT);
+  pinMode(buzzer, OUTPUT);
+  digitalWrite(buzzer, LOW);
 
   SPI.begin(18, 19, 23);      // SCK=18, MISO=19, MOSI=23
   mfrc522.PCD_Init();
@@ -218,6 +272,8 @@ void setup() {
   mqttClient.setServer(mqtt_server, port);
   mqttClient.setCallback(callback);
   mqttClient.setKeepAlive( 90 );
+  mqttConnect();  // Connect to MQTT
+  sendDoorStatus();  // Send initial status
 
   lcd.init();
   lcd.backlight();
@@ -238,6 +294,8 @@ void loop() {
   checkRFID();
 
   updateDistanceWatcher();
+  
+  checkDoorbellButton();  // Check doorbell button
 
   char key = keypad.getKey();
   KeyState state = keypad.getState();   // <<=== LẤY TRẠNG THÁI PHÍM
@@ -324,6 +382,12 @@ void loop() {
       }
     }
     delay(120);
+  }
+
+  // Send periodic door status updates
+  if (millis() - lastStatusSent > STATUS_INTERVAL) {
+    sendDoorStatus();
+    lastStatusSent = millis();
   }
 }
 
@@ -537,4 +601,77 @@ void showHomeScreen() {
   lcd.print("THONG MINH");
   delay(2000);
   lcd.clear();
+}
+
+void checkDoorbellButton() {
+  // Read current button state
+  int reading = digitalRead(doorbellButton);
+  
+  // Check if button state has changed for debouncing
+  if (reading != lastDoorbellButtonState) {
+    lastDoorbellDebounceTime = millis();
+  }
+  
+  // If button state stable for debounce delay
+  if ((millis() - lastDoorbellDebounceTime) > DOORBELL_DEBOUNCE_DELAY) {
+    // If button state actually changed
+    if (reading != doorbellButtonState) {
+      doorbellButtonState = reading;
+      
+      // Check for button press (LOW to HIGH transition - Active HIGH)
+      if (doorbellButtonState == HIGH && !doorbellButtonPressed) {
+        doorbellButtonPressed = true;
+        
+        Serial.println("Doorbell button pressed!");
+        
+        // Play ding-dong sound
+        playDingDong();
+        
+        // Publish MQTT message
+        if (mqttClient.connected()) {
+          bool published = mqttClient.publish("home/doorbell", "TRIGGER");
+          if (published) {
+            Serial.println("Doorbell MQTT published: TRIGGER");
+          } else {
+            Serial.println("Failed to publish doorbell MQTT");
+          }
+        } else {
+          Serial.println("MQTT not connected - doorbell message not sent");
+        }
+      }
+      
+      // Reset button pressed flag when released
+      if (doorbellButtonState == LOW) {
+        doorbellButtonPressed = false;
+        Serial.println("Doorbell button released - ready for next press");
+      }
+    }
+  }
+  
+  // Save reading for next iteration
+  lastDoorbellButtonState = reading;
+}
+
+void playDingDong() {
+  Serial.println("Playing Ding-Dong sound...");
+  
+  // First tone - "Ding" (higher pitch ~880 Hz)
+  for (int i = 0; i < 3; i++) {
+    digitalWrite(buzzer, HIGH);
+    delayMicroseconds(1136);
+    digitalWrite(buzzer, LOW);
+    delayMicroseconds(1136);
+  }
+  
+  delay(100);  // Short pause between tones
+  
+  // Second tone - "Dong" (lower pitch ~660 Hz)
+  for (int i = 0; i < 5; i++) {
+    digitalWrite(buzzer, HIGH);
+    delayMicroseconds(1515);
+    digitalWrite(buzzer, LOW);
+    delayMicroseconds(1515);
+  }
+  
+  Serial.println("Ding-Dong sound completed!");
 }

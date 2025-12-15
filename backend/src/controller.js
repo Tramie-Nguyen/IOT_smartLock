@@ -3,6 +3,7 @@ import axios from "axios";
 import qs from "qs";
 import User from "./models/User.js";
 import jwt from "jsonwebtoken";
+import { sendVerificationCode } from "./services/emailService.js";
 
 const pushNotification = async (message) => {
   const payload = {
@@ -48,8 +49,91 @@ const changeLockPassword = (req, res) => {
 
         return res.status(200).json({ message: "Lock password change request sent." });
     } catch (error) {
-        console.error("Error changing lock password:", error);
-        return res.status(500).json({ message: "Internal server error." });
+        console.error("Change lock password error:", error);
+        return res.status(500).json({ message: "Server error" });
+    }
+};
+
+// @desc    Lock the door remotely
+// @route   POST /api/lock-door
+// @access  Private
+const lockDoor = (req, res) => {
+    try {
+        // Send lock command to ESP32 via MQTT
+        publishToEsp("051_428_475/esp/door_control", JSON.stringify({
+            command: "LOCK",
+            timestamp: new Date().toISOString(),
+            userId: req.user?.id
+        }));
+
+        console.log("Lock command sent to ESP32");
+        
+        return res.status(200).json({ 
+            success: true,
+            message: "Door lock command sent successfully",
+            action: "LOCK"
+        });
+    } catch (error) {
+        console.error("Lock door error:", error);
+        return res.status(500).json({ 
+            success: false,
+            message: "Server error while locking door" 
+        });
+    }
+};
+
+// @desc    Unlock the door remotely
+// @route   POST /api/unlock-door
+// @access  Private
+const unlockDoor = (req, res) => {
+    try {
+        // Send unlock command to ESP32 via MQTT
+        publishToEsp("051_428_475/esp/door_control", JSON.stringify({
+            command: "UNLOCK",
+            timestamp: new Date().toISOString(),
+            userId: req.user?.id
+        }));
+
+        console.log("Unlock command sent to ESP32");
+        
+        return res.status(200).json({ 
+            success: true,
+            message: "Door unlock command sent successfully",
+            action: "UNLOCK"
+        });
+    } catch (error) {
+        console.error("Unlock door error:", error);
+        return res.status(500).json({ 
+            success: false,
+            message: "Server error while unlocking door" 
+        });
+    }
+};
+
+// @desc    Get current door status
+// @route   GET /api/door-status
+// @access  Private
+const getDoorStatus = (req, res) => {
+    try {
+        // Request status from ESP32 via MQTT
+        publishToEsp("051_428_475/esp/status_request", JSON.stringify({
+            command: "GET_STATUS",
+            timestamp: new Date().toISOString(),
+            userId: req.user?.id
+        }));
+
+        console.log("Door status request sent to ESP32");
+        
+        return res.status(200).json({ 
+            success: true,
+            message: "Door status request sent" 
+        });
+    } catch (error) {
+        console.error("Get door status error:", error);
+        return res.status(500).json({ 
+            success: false,
+            message: "Server error while getting door status" 
+        });
     }
 };
 
@@ -199,7 +283,7 @@ const signin = async (req, res) => {
   }
 };
 
-// @desc    Send password reset email
+// @desc    Send password reset verification code
 // @route   POST /api/auth/forgot-password
 // @access  Public
 const forgotPassword = async (req, res) => {
@@ -221,19 +305,37 @@ const forgotPassword = async (req, res) => {
       });
     }
 
-    // Generate reset token
-    const resetToken = user.generateResetPasswordToken();
+    // Generate 6-digit verification code
+    const verificationCode = user.generateResetPasswordCode();
     await user.save();
 
-    // In a real app, you would send an email here
-    // For now, we'll just return the token (NOT secure for production)
-    console.log(`Password reset token for ${email}: ${resetToken}`);
+    // Send verification code via email
+    const emailResult = await sendVerificationCode(email, verificationCode, user.fullName);
+
+    if (!emailResult.success) {
+      console.error('Failed to send email:', emailResult.error);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to send verification email. Please try again.'
+      });
+    }
+
+    console.log(`📧 Verification code sent to ${email}: ${verificationCode}`);
+    if (emailResult.previewUrl) {
+      console.log(`📧 Preview email: ${emailResult.previewUrl}`);
+    }
 
     res.status(200).json({
       success: true,
-      message: 'Password reset instructions sent to your email',
-      // Remove this in production - only for testing
-      resetToken: resetToken
+      message: 'Verification code sent to your email address. Please check your inbox.',
+      data: {
+        email: email,
+        // For development/testing only - remove in production
+        ...(process.env.NODE_ENV !== 'production' && {
+          previewUrl: emailResult.previewUrl,
+          verificationCode: verificationCode
+        })
+      }
     });
 
   } catch (error) {
@@ -346,4 +448,4 @@ const getProfile = async (req, res) => {
   }
 };
 
-export { changeLockPassword, pushNotification, signup, signin, forgotPassword, resetPassword, getProfile };
+export { changeLockPassword, pushNotification, signup, signin, forgotPassword, resetPassword, getProfile, lockDoor, unlockDoor, getDoorStatus };
