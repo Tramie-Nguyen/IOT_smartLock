@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import authService from '../services/authService';
 
 const SignUp = () => {
   const navigate = useNavigate();
@@ -9,19 +10,49 @@ const SignUp = () => {
     password: '',
     confirmPassword: ''
   });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const handleChange = (e) => {
     setFormData({
       ...formData,
       [e.target.name]: e.target.value
     });
+    // Clear error when user types
+    if (error) setError('');
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // Mock sign up - chỉ log data
-    console.log('Sign up data:', formData);
-    // TODO: Add registration logic here
+    setLoading(true);
+    setError('');
+
+    // Client-side validation
+    if (formData.password !== formData.confirmPassword) {
+      setError('Passwords do not match');
+      setLoading(false);
+      return;
+    }
+
+    if (formData.password.length < 8) {
+      setError('Password must be at least 8 characters');
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const result = await authService.signup(formData);
+      
+      if (result.success) {
+        // Navigate to home page after successful signup
+        navigate('/home');
+      }
+    } catch (error) {
+      console.error('Signup error:', error);
+      setError(error.message || 'Registration failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -40,6 +71,13 @@ const SignUp = () => {
 
         {/* Sign Up Form */}
         <form onSubmit={handleSubmit} className="space-y-5">
+          {/* Error Message */}
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+              <p className="text-sm text-red-800">{error}</p>
+            </div>
+          )}
+
           {/* Full Name Input */}
           <div>
             <label htmlFor="fullName" className="block text-sm font-medium text-gray-700 mb-2">
@@ -54,6 +92,7 @@ const SignUp = () => {
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition duration-200"
               placeholder="Enter your full name"
               required
+              disabled={loading}
             />
           </div>
 
@@ -71,6 +110,7 @@ const SignUp = () => {
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition duration-200"
               placeholder="Enter your email"
               required
+              disabled={loading}
             />
           </div>
 
@@ -86,8 +126,9 @@ const SignUp = () => {
               value={formData.password}
               onChange={handleChange}
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition duration-200"
-              placeholder="Create a password"
+              placeholder="Create a password (min 8 characters)"
               required
+              disabled={loading}
             />
           </div>
 
@@ -105,15 +146,17 @@ const SignUp = () => {
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition duration-200"
               placeholder="Confirm your password"
               required
+              disabled={loading}
             />
           </div>
 
           {/* Sign Up Button */}
           <button
             type="submit"
-            className="w-full bg-purple-600 text-white py-3 rounded-lg font-semibold hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition duration-200 shadow-lg mt-6"
+            className="w-full bg-purple-600 text-white py-3 rounded-lg font-semibold hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition duration-200 shadow-lg mt-6 disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={loading}
           >
-            Sign Up
+            {loading ? 'Creating Account...' : 'Sign Up'}
           </button>
         </form>
 
@@ -133,7 +176,8 @@ const SignUp = () => {
             Already have an account?{' '}
             <button
               onClick={() => navigate('/login')}
-              className="text-purple-600 hover:text-purple-800 font-semibold transition duration-200"
+              className="text-purple-600 hover:text-purple-800 font-semibold transition duration-200 disabled:opacity-50"
+              disabled={loading}
             >
               Sign In
             </button>

@@ -13,16 +13,68 @@ import {
 import { io } from "socket.io-client";
 import { db } from "../firebase-config";
 import { collection, query, orderBy, limit, getDocs } from "firebase/firestore";
+import authService from "../services/authService";
+import { io } from "socket.io-client";
 
 const Home = () => {
   const navigate = useNavigate();
   const [isLocked, setIsLocked] = useState(true);
   const [isConnected] = useState(true);
   const [network] = useState("HomeNetwork_5G");
+  const [user, setUser] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
   const [lastChanged, setLastChanged] = useState("--");
   const [lastAction, setLastAction] = useState("locked");
   const [recentActivity, setRecentActivity] = useState([]);
   const [socket, setSocket] = useState(null);
+
+  useEffect(() => {
+    // Get current user info
+    const currentUser = authService.getCurrentUser();
+    setUser(currentUser);
+
+    // Initialize WebSocket connection
+    const socket = io("http://localhost:3000");
+
+    // Listen for door status updates
+    socket.on("door_status_update", (data) => {
+      console.log("Door status update:", data);
+      setIsLocked(data.isLocked || data.status === "LOCKED");
+      setLastChanged(new Date().toLocaleString());
+    });
+
+    // Listen for door action completion
+    socket.on("door_action_complete", (data) => {
+      console.log("Door action complete:", data);
+      setIsLoading(false);
+
+      if (data.success) {
+        setIsLocked(data.action === "LOCK");
+        const newActivity = {
+          action: data.action === "LOCK" ? "Door Locked" : "Door Unlocked",
+          time: new Date().toLocaleString(),
+          type: data.action === "LOCK" ? "lock" : "unlock",
+        };
+        setRecentActivity((prev) => [newActivity, ...prev.slice(0, 3)]);
+        setLastChanged(newActivity.time);
+      }
+    });
+
+    // Get initial door status
+    getDoorStatus();
+
+    return () => {
+      socket.disconnect();
+    };
+  }, []);
+
+  const getDoorStatus = async () => {
+    try {
+      await authService.api.get("/door-status");
+    } catch (error) {
+      console.error("Error getting door status:", error);
+    }
+  };
 
   // Fetch last changed time from latest log
   const fetchLastChanged = useCallback(async () => {
@@ -183,11 +235,34 @@ const Home = () => {
       socket.disconnect();
     }
     navigate("/login");
+    authService.logout();
+    navigate("/login");
   };
 
-  const toggleLock = () => {
-    // Manual lock/unlock from app
-    // TODO: Implement API call
+  const toggleLock = async () => {
+    if (isLoading) return;
+
+    try {
+      setIsLoading(true);
+
+      if (isLocked) {
+        // Unlock the door
+        const response = await authService.api.post("/unlock-door");
+        console.log("Unlock response:", response.data);
+      } else {
+        // Lock the door
+        const response = await authService.api.post("/lock-door");
+        console.log("Lock response:", response.data);
+      }
+    } catch (error) {
+      console.error("Error toggling lock:", error);
+      setIsLoading(false);
+
+      // Show error message or handle error
+      if (error.response?.status === 401) {
+        navigate("/login");
+      }
+    }
   };
 
   return (
@@ -200,9 +275,16 @@ const Home = () => {
               <div className="w-10 h-10 bg-indigo-600 rounded-lg flex items-center justify-center">
                 <Lock className="w-6 h-6 text-white" />
               </div>
-              <h1 className="text-xl font-bold text-gray-900">
-                Smart Door Lock
-              </h1>
+              <div>
+                <h1 className="text-xl font-bold text-gray-900">
+                  Smart Door Lock
+                </h1>
+                {user && (
+                  <p className="text-sm text-gray-500">
+                    Welcome back, {user.fullName}
+                  </p>
+                )}
+              </div>
             </div>
 
             <nav className="flex items-center gap-6">
@@ -240,13 +322,18 @@ const Home = () => {
 
                 <button
                   onClick={toggleLock}
+                  disabled={isLoading}
                   className={`w-40 h-40 rounded-full flex items-center justify-center transition-all transform hover:scale-105 shadow-2xl ${
-                    isLocked
+                    isLoading
+                      ? "bg-gray-400 cursor-not-allowed"
+                      : isLocked
                       ? "bg-white/20 backdrop-blur-sm hover:bg-white/30"
                       : "bg-yellow-400 hover:bg-yellow-500"
                   }`}
                 >
-                  {isLocked ? (
+                  {isLoading ? (
+                    <div className="w-20 h-20 border-4 border-white border-t-transparent rounded-full animate-spin"></div>
+                  ) : isLocked ? (
                     <Lock className="w-20 h-20 text-white" />
                   ) : (
                     <Unlock className="w-20 h-20 text-gray-800" />
@@ -255,7 +342,11 @@ const Home = () => {
 
                 <div className="text-center">
                   <p className="text-2xl font-semibold">
-                    {isLocked ? "Door Locked" : "Door Unlocked"}
+                    {isLoading
+                      ? "Processing..."
+                      : isLocked
+                      ? "Door Locked"
+                      : "Door Unlocked"}
                   </p>
                   <p className="text-sm text-white/70 mt-2">
                     {isLocked

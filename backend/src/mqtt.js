@@ -72,9 +72,55 @@ mqttClient.on("message", (topic, message) => {
     console.log(logMessage);
     pushNotification(logMessage);
     storeLog("LOITERING", logMessage, topic, logDetails);
+  } else if (topic === "051_428_475/esp/keypad-failed") {
+    console.log(
+      `Keypad authentication failed ${msg} times on Smart Lock at ${new Date().toLocaleString(
+        "vi-VN",
+        { timeZone: "Asia/Ho_Chi_Minh" }
+      )}.`
+    );
+    pushNotification(
+      `Keypad authentication failed ${msg} times on Smart Lock at ${new Date().toLocaleString(
+        "vi-VN",
+        { timeZone: "Asia/Ho_Chi_Minh" }
+      )}.`
+    );
+  } else if (topic === "051_428_475/esp/loitering-detected") {
+    console.log(
+      `${msg} at ${new Date().toLocaleString("vi-VN", {
+        timeZone: "Asia/Ho_Chi_Minh",
+      })}.`
+    );
+    pushNotification(
+      `${msg} at ${new Date().toLocaleString("vi-VN", {
+        timeZone: "Asia/Ho_Chi_Minh",
+      })}.`
+    );
+  } else if (topic === "051_428_475/esp/door_status") {
+    console.log("Door status update:", msg);
+    // Parse door status and broadcast to frontend
+    try {
+      const statusData = JSON.parse(msg);
+      if (global.io) {
+        global.io.emit("door_status_update", statusData);
+      }
+    } catch (error) {
+      console.error("Error parsing door status:", error);
+    }
+  } else if (topic === "051_428_475/esp/door_action") {
+    console.log("Door action completed:", msg);
+    // Broadcast door action result to frontend
+    try {
+      const actionData = JSON.parse(msg);
+      if (global.io) {
+        global.io.emit("door_action_complete", actionData);
+      }
+    } catch (error) {
+      console.error("Error parsing door action:", error);
+    }
   }
 
-  // Gửi cho FE qua socket
+  // Gửi cho FE qua socket cho các topic khác
   if (global.io) {
     global.io.emit(topic, {
       message: logMessage || msg,
@@ -115,6 +161,14 @@ mqttClient.on("connect", () => {
   });
 });
 
+// Subscribe to door status and action topics
+mqttClient.subscribe("051_428_475/esp/door_status", (err) => {
+  if (!err) console.log("Subscribed: 051_428_475/esp/door_status");
+});
+
+mqttClient.subscribe("051_428_475/esp/door_action", (err) => {
+  if (!err) console.log("Subscribed: 051_428_475/esp/door_action");
+});
 // hàm publish cho controller sử dụng
 export const publishToEsp = (topic, msg) => {
   mqttClient.publish(topic, msg);
