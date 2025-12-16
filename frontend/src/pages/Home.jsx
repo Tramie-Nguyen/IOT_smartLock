@@ -25,7 +25,6 @@ const Home = () => {
   const [lastChanged, setLastChanged] = useState("--");
   const [lastAction, setLastAction] = useState("locked");
   const [recentActivity, setRecentActivity] = useState([]);
-  //const [socket, setSocket] = useState(null);
 
   useEffect(() => {
     // Get current user info
@@ -182,11 +181,11 @@ const Home = () => {
     fetchLastChanged();
     fetchRecentActivity();
 
-    const newSocket = io("http://localhost:3000");
-    setSocket(newSocket);
+    // const newSocket = io("http://localhost:3000");
+    // setSocket(newSocket);
 
     // Listen for door action completion
-    newSocket.on("door_action_complete", (data) => {
+    socket.on("door_action_complete", (data) => {
       console.log("Door action complete:", data);
       setIsLoading(false);
 
@@ -212,7 +211,7 @@ const Home = () => {
       }
     });
 
-    newSocket.on("051_428_475/esp/nfc-success", (data) => {
+    socket.on("051_428_475/esp/nfc-success", (data) => {
       console.log("NFC Success:", data);
       handleDoorUnlock(data);
     });

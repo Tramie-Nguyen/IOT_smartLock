@@ -164,6 +164,16 @@ const authService = {
     }
   },
 
+  // Change lock password
+  changeLockPassword: async (passwordData) => {
+    try {
+      const response = await api.post('/change-password', passwordData);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { success: false, message: 'Network error' };
+    }
+  },
+
   api: api
 };
 

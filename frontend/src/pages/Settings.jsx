@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import authService from "../services/authService";
 import {
   Eye,
   EyeOff,
@@ -71,13 +72,10 @@ const Settings = () => {
 
     try {
       // Gọi API để đổi mật khẩu khóa
-      const response = await axios.post(
-        "http://localhost:3000/api/change-password",
-        {
-          oldLockPassword: oldLockPassword,
-          newLockPassword: lockPassword,
-        }
-      );
+      const response = await authService.changeLockPassword({
+        oldLockPassword,
+        newLockPassword: lockPassword,
+      });
 
       alert("Lock password change request sent. Waiting for ESP response...");
     } catch (error) {
