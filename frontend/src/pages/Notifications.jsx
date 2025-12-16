@@ -66,7 +66,7 @@ const Notifications = () => {
         icon = AlertCircle;
         severity = "alert";
         break;
-      case "051_428_475/esp/doorbell-pressed":
+      case "051_428_475/esp/doorbell":
         type = "doorbell";
         title = "Doorbell Pressed";
         message = data.message || "Someone pressed your doorbell.";
