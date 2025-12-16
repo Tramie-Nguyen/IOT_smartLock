@@ -388,13 +388,6 @@ void loop() {
       }
     }
     delay(120);
-  }
-
-  // Send periodic door status updates
-  if (millis() - lastStatusSent > STATUS_INTERVAL) {
-    sendDoorStatus();
-    lastStatusSent = millis();
-  }
 }
 
 void handleChangePw() {
