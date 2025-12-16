@@ -10,8 +10,8 @@
 #include <MFRC522.h>
 #include <ArduinoJson.h>
 
-const char* ssid = "Mit";
-const char* password = "27072005";
+const char* ssid = "hnaht";
+const char* password = "1234567890";
 bool wifiStatusPublished = false;
 
 String teamKey = "051_428_475";
@@ -79,7 +79,7 @@ char keys[ROWS][COLS] =
   {'*', '0', '#'},
 };
 
-byte rowPins[ROWS] = {36, 4, 16, 17};
+byte rowPins[ROWS] = {0, 4, 16, 17};
 byte colPins[COLS] = {32, 33, 25}; 
 String initualPW = "123456";
 String currentInput = "";
