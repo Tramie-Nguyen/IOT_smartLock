@@ -30,7 +30,7 @@ const Settings = () => {
   // Lắng nghe phản hồi từ ESP qua socket
   useEffect(() => {
     const handleLockPasswordResponse = (data) => {
-      const message = data.message;
+      const message = data.rawPayload;
 
       if (message === "JSON_ERROR") {
         alert("Error: Invalid data format");

@@ -176,13 +176,6 @@ const Home = () => {
     const newSocket = io("http://localhost:3000");
     setSocket(newSocket);
 
-    // // Listen for door status updates
-    // newSocket.on("door_status_update", (data) => {
-    //   console.log("Door status update:", data);
-    //   setIsLocked(data.status === "locked");
-    //   setLastChanged(new Date().toLocaleString());
-    // });
-
     // Listen for door action completion
     newSocket.on("door_action_complete", (data) => {
       console.log("Door action complete:", data);
@@ -197,30 +190,17 @@ const Home = () => {
         };
         setRecentActivity((prev) => [newActivity, ...prev.slice(0, 3)]);
         setLastChanged(newActivity.time);
+        setLastAction(data.action === "LOCK" ? "locked" : "unlocked");
+        
+        // Auto-lock after 3 seconds if unlocked
+        if (data.action === "UNLOCK") {
+          setTimeout(() => {
+            setIsLocked(true);
+            setLastAction("locked");
+            console.log("Door auto-locked after 3 seconds");
+          }, 3000);
+        }
       }
-    });
-
-    // Listen for manual door unlock from ESP32
-    newSocket.on("door_unlocked", (data) => {
-      console.log("Door unlocked manually:", data);
-      setIsLocked(false);
-      setLastAction("unlocked");
-      setLastChanged(data.timestamp);
-      
-      // Add to activity log
-      const newActivity = {
-        action: `Door Unlocked (${data.method})`,
-        time: data.timestamp,
-        type: "unlock",
-      };
-      setRecentActivity((prev) => [newActivity, ...prev.slice(0, 3)]);
-      
-      // Auto-lock after 3 seconds
-      setTimeout(() => {
-        setIsLocked(true);
-        setLastAction("locked");
-        console.log("Door auto-locked after 3 seconds");
-      }, 3000);
     });
 
     newSocket.on("051_428_475/esp/nfc-success", (data) => {

@@ -101,10 +101,7 @@ mqttClient.on("message", async (topic, message) => {
     // Parse door status and broadcast to frontend
     try {
       const statusData = JSON.parse(msg);
-      if (global.io) {
-        // Emit main door status update
-        global.io.emit("door_status_update", statusData);
-        
+      if (global.io) {        
         // Emit door_action_complete for web interface actions
         if (statusData.status) {
           global.io.emit("door_action_complete", {
@@ -127,7 +124,7 @@ mqttClient.on("message", async (topic, message) => {
       console.error("Error parsing door status:", error);
     }
   } else if (topic === "051_428_475/esp/doorbell") {
-    console.log("🔔 DOORBELL TOPIC RECEIVED!");
+    console.log("DOORBELL TOPIC RECEIVED!");
     console.log("Topic:", topic);
     console.log("Message:", msg);
     
