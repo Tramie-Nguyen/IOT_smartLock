@@ -79,7 +79,7 @@ char keys[ROWS][COLS] =
   {'*', '0', '#'},
 };
 
-byte rowPins[ROWS] = {0, 4, 16, 17};
+byte rowPins[ROWS] = {36, 4, 16, 17};
 byte colPins[COLS] = {32, 33, 25}; 
 String initualPW = "123456";
 String currentInput = "";
