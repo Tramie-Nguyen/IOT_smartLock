@@ -9,6 +9,14 @@ const options = {
   clean: true,
 };
 
+// Lưu trạng thái wifi cuối cùng
+export let lastWifiStatus = {
+  connected: false,
+  ssid: null,
+  timestamp: null,
+};
+
+
 const mqttClient = mqtt.connect(mqttUrl, options);
 
 const storeLog = async (type, message, topic, logDetails) => {
@@ -33,6 +41,7 @@ mqttClient.on("message", async (topic, message) => {
   console.log("MQTT Message:", topic, msg);
 
   // Khai báo biến cần thiết
+  // chuẩn hóa thời gian
   const localTime = new Date().toLocaleString("vi-VN", {
     timeZone: "Asia/Ho_Chi_Minh",
   });
@@ -72,30 +81,6 @@ mqttClient.on("message", async (topic, message) => {
     console.log(logMessage);
     pushNotification(logMessage);
     storeLog("LOITERING", logMessage, topic, logDetails);
-  } else if (topic === "051_428_475/esp/keypad-failed") {
-    console.log(
-      `Keypad authentication failed ${msg} times on Smart Lock at ${new Date().toLocaleString(
-        "vi-VN",
-        { timeZone: "Asia/Ho_Chi_Minh" }
-      )}.`
-    );
-    pushNotification(
-      `Keypad authentication failed ${msg} times on Smart Lock at ${new Date().toLocaleString(
-        "vi-VN",
-        { timeZone: "Asia/Ho_Chi_Minh" }
-      )}.`
-    );
-  } else if (topic === "051_428_475/esp/loitering-detected") {
-    console.log(
-      `${msg} at ${new Date().toLocaleString("vi-VN", {
-        timeZone: "Asia/Ho_Chi_Minh",
-      })}.`
-    );
-    pushNotification(
-      `${msg} at ${new Date().toLocaleString("vi-VN", {
-        timeZone: "Asia/Ho_Chi_Minh",
-      })}.`
-    );
   } else if (topic === "051_428_475/esp/door_status") {
     console.log("Door status update:", msg);
     // Parse door status and broadcast to frontend
@@ -155,6 +140,14 @@ mqttClient.on("message", async (topic, message) => {
     // Store log
     console.log("Storing doorbell log...");
     storeLog("DOORBELL", logMessage, topic, logDetails);
+  } else if (topic === "051_428_475/esp/wifi_connected") {
+      console.log("WiFi connected:", msg);
+
+      lastWifiStatus = {
+        connected: true,
+        ssid: msg,
+        timestamp: localTime,
+      };
   }
 
   // Gửi cho FE qua socket cho các topic khác
@@ -200,6 +193,11 @@ mqttClient.on("connect", () => {
   mqttClient.subscribe("051_428_475/esp/doorbell", (err) => {
     if (!err) console.log("Subscribed: 051_428_475/esp/doorbell");
   });
+
+  mqttClient.subscribe("051_428_475/esp/wifi_connected", (err) => {
+    if (!err) console.log("Subscribed: 051_428_475/esp/wifi_connected");
+  });
+});
 
   // Subscribe to door status and action topics
   mqttClient.subscribe("051_428_475/esp/door_status", (err) => {

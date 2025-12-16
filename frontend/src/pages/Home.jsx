@@ -10,7 +10,7 @@ import {
   Settings,
   LogOut,
 } from "lucide-react";
-import { io } from "socket.io-client";
+import { socket } from "../socket";
 import { db } from "../firebase-config";
 import { collection, query, orderBy, limit, getDocs } from "firebase/firestore";
 import authService from "../services/authService";
@@ -18,14 +18,14 @@ import authService from "../services/authService";
 const Home = () => {
   const navigate = useNavigate();
   const [isLocked, setIsLocked] = useState(true);
-  const [isConnected] = useState(true);
-  const [network] = useState("HomeNetwork_5G");
+  const [isConnected, setIsConnected] = useState(false);
+  const [network, setNetwork] = useState("Not Connected");
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [lastChanged, setLastChanged] = useState("--");
   const [lastAction, setLastAction] = useState("locked");
   const [recentActivity, setRecentActivity] = useState([]);
-  const [socket, setSocket] = useState(null);
+  //const [socket, setSocket] = useState(null);
 
   useEffect(() => {
     // Get current user info
@@ -168,6 +168,15 @@ const Home = () => {
     }, 3000);
   }, [fetchLastChanged, fetchRecentActivity]);
 
+  // lấy trạng thái wifi từ mqtt message (topic wifi_connected và payload là tên mạng)
+  const handleWifiStatus = useCallback((data) => {
+    if (data?.rawPayload) {
+      setNetwork(data.rawPayload);
+      setIsConnected(true);
+    }
+  }, []);
+
+
   // Connect to Socket.IO and listen for real-time updates
   useEffect(() => {
     fetchLastChanged();
@@ -208,33 +217,45 @@ const Home = () => {
       handleDoorUnlock(data);
     });
 
-    newSocket.on("051_428_475/esp/keypad-success", (data) => {
+    socket.on("051_428_475/esp/keypad-success", (data) => {
       console.log("Keypad Success:", data);
       handleDoorUnlock(data);
     });
 
-    newSocket.on("051_428_475/esp/nfc-failed", (data) => {
+    socket.on("051_428_475/esp/nfc-failed", (data) => {
       console.log("NFC Failed:", data);
       fetchLastChanged();
       fetchRecentActivity();
     });
 
-    newSocket.on("051_428_475/esp/keypad-failed", (data) => {
+    socket.on("051_428_475/esp/keypad-failed", (data) => {
       console.log("Keypad Failed:", data);
       fetchLastChanged();
       fetchRecentActivity();
     });
 
-    newSocket.on("051_428_475/esp/loitering-detected", (data) => {
+    socket.on("051_428_475/esp/loitering-detected", (data) => {
       console.log("Loitering Detected:", data);
       fetchLastChanged();
       fetchRecentActivity();
     });
 
+    socket.on("051_428_475/esp/wifi_connected", (data) => {
+      console.log("WiFi Connected:", data);
+      handleWifiStatus(data);
+    });
+
+    socket.emit("request_initial_state"); // để lấy wifi status ngay khi connect
+
     return () => {
-      newSocket.disconnect();
+      socket.off("051_428_475/esp/nfc-success");
+      socket.off("051_428_475/esp/keypad-success");
+      socket.off("051_428_475/esp/nfc-failed");
+      socket.off("051_428_475/esp/keypad-failed");
+      socket.off("051_428_475/esp/loitering-detected");
+      socket.off("051_428_475/esp/wifi_connected");
     };
-  }, [fetchLastChanged, fetchRecentActivity, handleDoorUnlock]);
+  }, [fetchLastChanged, fetchRecentActivity, handleDoorUnlock, handleWifiStatus]);
 
   const handleLogout = () => {
     if (socket) {
@@ -242,7 +263,6 @@ const Home = () => {
     }
     navigate("/login");
     authService.logout();
-    navigate("/login");
   };
 
   const toggleLock = async () => {

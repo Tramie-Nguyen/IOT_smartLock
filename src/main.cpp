@@ -12,6 +12,7 @@
 
 const char* ssid = "Mit";
 const char* password = "27072005";
+bool wifiStatusPublished = false;
 
 String teamKey = "051_428_475";
 
@@ -285,16 +286,25 @@ void setup() {
 void loop() {
   if (WiFi.status() != WL_CONNECTED) {
     Serial.println("Reconnecting to WiFi...");
-    Serial.println("Reconnecting to WiFi...");
     wifiConnect();
   }
+
   if(!mqttClient.connected()) {
-    Serial.println("Reconnecting to MQTT...");
     Serial.println("Reconnecting to MQTT...");
     mqttConnect();
   }
+
   mqttClient.loop();
 
+  if (mqttClient.connected() && !wifiStatusPublished) {
+    mqttClient.publish(
+      (teamKey + "/esp/wifi_connected").c_str(),
+      ssid,
+      true // retain để khi backend kết nối sau vẫn nhận được trạng thái này
+    );
+    wifiStatusPublished = true;
+  }
+  
   checkRFID();
 
   updateDistanceWatcher();
