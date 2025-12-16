@@ -205,7 +205,7 @@ const Notifications = () => {
       {/* Main Content */}
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex items-center justify-between mb-6">
-          {/* Title and Count (left) */}
+          {/* Title and Count */}
           <div className="flex items-center gap-2">
             <h2 className="text-2xl font-bold text-gray-900">
               All Notifications
@@ -216,7 +216,7 @@ const Notifications = () => {
               </span>
             )}
           </div>
-          {/* Clear All Button (right) */}
+          {/* Clear All Button */}
           {notifications.length > 0 && (
             <button
               onClick={handleClearAll}
@@ -251,7 +251,7 @@ const Notifications = () => {
                   )} hover:shadow-lg transition-shadow p-5`}
                 >
                   <div className="flex gap-4">
-                    {/* Icon + Action (left) */}
+                    {/* Icon + Action */}
                     <div
                       className={`flex-shrink-0 w-12 h-12 rounded-lg flex items-center justify-center ${getIconBgColor(
                         notif.severity
@@ -270,7 +270,7 @@ const Notifications = () => {
                       </p>
                       <p className="text-xs text-gray-500 mt-2">{notif.time}</p>
                     </div>
-                    {/* Remove Button (right) */}
+                    {/* Remove Button */}
                     <button
                       onClick={() => handleRemoveNotification(notif.id)}
                       className="flex-shrink-0 w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"

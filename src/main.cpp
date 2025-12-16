@@ -548,6 +548,7 @@ void printAndOpenDoor(){
 
 void unlockFromApp(){
   Serial.println("Starting remote unlock from app...");
+  isDoorLocked = false;
   printAndOpenDoor();
 }
 
