@@ -125,11 +125,7 @@ const changeLockPassword = (req, res) => {
 const lockDoor = (req, res) => {
     try {
         // Send lock command to ESP32 via MQTT
-        publishToEsp("051_428_475/esp/door_control", JSON.stringify({
-            command: "LOCK",
-            timestamp: new Date().toISOString(),
-            userId: req.user?.id
-        }));
+        publishToEsp("051_428_475/esp/door_control", "lock");
 
         console.log("Lock command sent to ESP32");
         
@@ -153,11 +149,7 @@ const lockDoor = (req, res) => {
 const unlockDoor = (req, res) => {
     try {
         // Send unlock command to ESP32 via MQTT
-        publishToEsp("051_428_475/esp/door_control", JSON.stringify({
-            command: "UNLOCK",
-            timestamp: new Date().toISOString(),
-            userId: req.user?.id
-        }));
+        publishToEsp("051_428_475/esp/door_control", "unlock");
 
         console.log("Unlock command sent to ESP32");
         

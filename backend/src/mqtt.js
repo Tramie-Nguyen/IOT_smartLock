@@ -118,6 +118,21 @@ mqttClient.on("message", (topic, message) => {
     } catch (error) {
       console.error("Error parsing door action:", error);
     }
+  } else if (topic === "051_428_475/esp/door_unlock") {
+    console.log("Door unlocked manually:", msg);
+    // Broadcast door unlock to frontend
+    try {
+      const unlockData = JSON.parse(msg);
+      if (global.io) {
+        global.io.emit("door_unlocked", {
+          status: "unlocked",
+          timestamp: new Date().toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }),
+          method: unlockData.method || "manual"
+        });
+      }
+    } catch (error) {
+      console.error("Error parsing door unlock:", error);
+    }
   } else if (topic === "051_428_475/esp/doorbell") {
     const timestamp = new Date().toLocaleString("vi-VN", {
       timeZone: "Asia/Ho_Chi_Minh",
@@ -192,6 +207,10 @@ mqttClient.subscribe("051_428_475/esp/door_status", (err) => {
 
 mqttClient.subscribe("051_428_475/esp/door_action", (err) => {
   if (!err) console.log("Subscribed: 051_428_475/esp/door_action");
+});
+
+mqttClient.subscribe("051_428_475/esp/door_unlock", (err) => {
+  if (!err) console.log("Subscribed: 051_428_475/esp/door_unlock");
 });
 // hàm publish cho controller sử dụng
 export const publishToEsp = (topic, msg) => {

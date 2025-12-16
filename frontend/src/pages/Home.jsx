@@ -59,7 +59,30 @@ const Home = () => {
       }
     });
 
-    // Get initial door status
+    // Listen for manual door unlock from ESP32
+    socket.on("door_unlocked", (data) => {
+      console.log("Door unlocked manually:", data);
+      setIsLocked(false);
+      setLastAction("unlocked");
+      setLastChanged(data.timestamp);
+      
+      // Add to activity log
+      const newActivity = {
+        action: `Door Unlocked (${data.method})`,
+        time: data.timestamp,
+        type: "unlock",
+      };
+      setRecentActivity((prev) => [newActivity, ...prev.slice(0, 3)]);
+      
+      // Auto-lock after 3 seconds
+      setTimeout(() => {
+        setIsLocked(true);
+        setLastAction("locked");
+        console.log("Door auto-locked after 3 seconds");
+      }, 3000);
+    });
+
+    // Get initial door status when component loads
     getDoorStatus();
 
     return () => {
@@ -67,8 +90,19 @@ const Home = () => {
     };
   }, []);
 
+  // Send door status request every time the page loads/reloads
+  useEffect(() => {
+    const requestDoorStatus = async () => {
+      console.log("Requesting door status on page load...");
+      await getDoorStatus();
+    };
+    
+    requestDoorStatus();
+  }, []); // Run once when component mounts
+
   const getDoorStatus = async () => {
     try {
+      console.log("Sending door status request to backend...");
       await authService.api.get("/door-status");
     } catch (error) {
       console.error("Error getting door status:", error);

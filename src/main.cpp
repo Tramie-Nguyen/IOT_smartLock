@@ -123,6 +123,7 @@ void mqttConnect() {
       //***Subscribe all topic you need***
       mqttClient.subscribe((teamKey + "/esp/change_pw").c_str());
       mqttClient.subscribe((teamKey + "/esp/door_control").c_str());
+      mqttClient.subscribe((teamKey + "/esp/status_request").c_str());
     }
     else {
       Serial.print(mqttClient.state());
@@ -154,6 +155,12 @@ void callback(char* topic, byte* message, unsigned int length) {
   //***Code here to process the received package***
   if (String(topic) == (teamKey + "/esp/change_pw").c_str()) {
     handleChangePWFromWeb(msg);
+  }
+
+  // Handle door status request
+  if (String(topic) == (teamKey + "/esp/status_request").c_str()) {
+    Serial.println("Door status request received from backend");
+    sendDoorStatus(); // Send current door status back to backend
   }
 
   // Handle door control commands
@@ -522,6 +529,14 @@ void printAndOpenDoor(){
   lcd.setCursor(2,1);
   lcd.print("THANH CONG!");
   digitalWrite(greenLedAndRelay, HIGH);
+  
+  // Publish door unlock status to MQTT
+  if (mqttClient.connected()) {
+    String unlockMessage = "{\"status\":\"unlocked\",\"timestamp\":" + String(millis()) + ",\"method\":\"manual\"}";
+    mqttClient.publish((teamKey + "/esp/door_unlock").c_str(), unlockMessage.c_str());
+    Serial.println("Door unlock status sent: " + unlockMessage);
+  }
+  
   delay(3000);
   digitalWrite(greenLedAndRelay, LOW);
   wrongPw = 0;
