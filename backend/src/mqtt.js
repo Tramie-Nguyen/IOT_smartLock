@@ -9,6 +9,14 @@ const options = {
   clean: true,
 };
 
+// Lưu trạng thái wifi cuối cùng
+export let lastWifiStatus = {
+  connected: false,
+  ssid: null,
+  timestamp: null,
+};
+
+
 const mqttClient = mqtt.connect(mqttUrl, options);
 
 const storeLog = async (type, message, topic, logDetails) => {
@@ -95,6 +103,14 @@ mqttClient.on("message", (topic, message) => {
     } catch (error) {
       console.error("Error parsing door action:", error);
     }
+  } else if (topic === "051_428_475/esp/wifi_connected") {
+      console.log("WiFi connected:", msg);
+
+      lastWifiStatus = {
+        connected: true,
+        ssid: msg,
+        timestamp: localTime,
+      };
   }
 
   // Gửi cho FE qua socket cho các topic khác
@@ -135,6 +151,10 @@ mqttClient.on("connect", () => {
 
   mqttClient.subscribe("051_428_475/esp/loitering-detected", (err) => {
     if (!err) console.log("Subscribed: 051_428_475/esp/loitering-detected");
+  });
+
+  mqttClient.subscribe("051_428_475/esp/wifi_connected", (err) => {
+    if (!err) console.log("Subscribed: 051_428_475/esp/wifi_connected");
   });
 });
 
