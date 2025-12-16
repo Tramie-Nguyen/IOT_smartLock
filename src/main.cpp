@@ -679,7 +679,6 @@ void checkDoorbellButton() {
 void playDingDong() {
   Serial.println("Playing Ding-Dong sound...");
   
-  // First tone - "Ding" (higher pitch ~880 Hz)
   for (int i = 0; i < 3; i++) {
     digitalWrite(buzzer, HIGH);
     delayMicroseconds(1136);
@@ -689,7 +688,6 @@ void playDingDong() {
   
   delay(100);  // Short pause between tones
   
-  // Second tone - "Dong" (lower pitch ~660 Hz)
   for (int i = 0; i < 5; i++) {
     digitalWrite(buzzer, HIGH);
     delayMicroseconds(1515);
