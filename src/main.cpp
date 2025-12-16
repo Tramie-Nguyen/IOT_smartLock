@@ -202,6 +202,9 @@ void checkRFID() {
   if (uid == uid2) {
     Serial.println("The hop le -> Mo cua!");
     mqttClient.publish((teamKey + "/esp/nfc-success").c_str(), "SUCCESS");
+    digitalWrite(buzzer, HIGH);
+    delay(500);
+    digitalWrite(buzzer, LOW);
     printAndOpenDoor();
   } else {
     Serial.println("The khong hop le!");
