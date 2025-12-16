@@ -197,14 +197,12 @@ mqttClient.on("connect", () => {
   mqttClient.subscribe("051_428_475/esp/wifi_connected", (err) => {
     if (!err) console.log("Subscribed: 051_428_475/esp/wifi_connected");
   });
-});
 
-  // Subscribe to door status and action topics
   mqttClient.subscribe("051_428_475/esp/door_status", (err) => {
     if (!err) console.log("Subscribed: 051_428_475/esp/door_status");
   });
-
 });
+
 // hàm publish cho controller sử dụng
 export const publishToEsp = (topic, msg) => {
   mqttClient.publish(topic, msg);
