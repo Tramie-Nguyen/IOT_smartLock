@@ -4,6 +4,7 @@ import qs from "qs";
 import User from "./models/User.js";
 import jwt from "jsonwebtoken";
 import { sendVerificationCode } from "./services/emailService.js";
+import nodemailer from "nodemailer";
 
 const pushNotification = async (message) => {
   const payload = {
@@ -29,6 +30,70 @@ const pushNotification = async (message) => {
     console.log("Push sent:", response.data);
   } catch (err) {
     console.error("Push failed:", err.response?.data || err);
+  }
+};
+
+const sendDoorbellEmail = async (timestamp, message) => {
+  try {
+    // Get verified user emails from database
+    const users = await User.find({ isVerified: true }, 'email');
+    const userEmails = users.map(user => user.email);
+    
+    if (userEmails.length === 0) {
+      console.log('No verified users found for doorbell email notifications');
+      return;
+    }
+
+    // Create email transporter
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASSWORD
+      }
+    });
+
+    const emailFrom = process.env.EMAIL_FROM || '"Smart Lock Doorbell" <noreply@smartlock.com>';
+
+    // Send email to all verified users
+    for (const email of userEmails) {
+      const mailOptions = {
+        from: emailFrom,
+        to: email,
+        subject: 'Doorbell Ringing',
+        text: `A guest is visiting!\n\nTime: ${timestamp}\nMessage: ${message}\n\nPlease check your door.`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <div style="background-color: #f0f8ff; padding: 20px; border-radius: 10px; border-left: 5px solid #007bff;">
+              <h2 style="color: #007bff; margin-top: 0;">Doorbell Alert</h2>
+              <p style="font-size: 18px; color: #333;">
+                <strong>A guest is visiting!</strong>
+              </p>
+              <hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;">
+              <p style="color: #666;">
+                <strong>Time:</strong> ${timestamp}<br>
+                <strong>Message:</strong> ${message}
+              </p>
+              <div style="background-color: #fff3cd; padding: 15px; border-radius: 5px; margin-top: 20px;">
+                <p style="margin: 0; color: #856404;">
+                  Please check your door or security camera to see who is visiting.
+                </p>
+              </div>
+            </div>
+            <p style="text-align: center; color: #999; font-size: 12px; margin-top: 20px;">
+              This is an automated notification from your Smart Lock Doorbell System.
+            </p>
+          </div>
+        `
+      };
+
+      await transporter.sendMail(mailOptions);
+      console.log('Doorbell email sent to:', email);
+    }
+    
+    console.log(`Doorbell email notifications sent to ${userEmails.length} users`);
+  } catch (error) {
+    console.error('Error sending doorbell email notifications:', error);
   }
 };
 const changeLockPassword = (req, res) => {
@@ -60,11 +125,7 @@ const changeLockPassword = (req, res) => {
 const lockDoor = (req, res) => {
     try {
         // Send lock command to ESP32 via MQTT
-        publishToEsp("051_428_475/esp/door_control", JSON.stringify({
-            command: "LOCK",
-            timestamp: new Date().toISOString(),
-            userId: req.user?.id
-        }));
+        publishToEsp("051_428_475/esp/door_control", "lock");
 
         console.log("Lock command sent to ESP32");
         
@@ -88,11 +149,7 @@ const lockDoor = (req, res) => {
 const unlockDoor = (req, res) => {
     try {
         // Send unlock command to ESP32 via MQTT
-        publishToEsp("051_428_475/esp/door_control", JSON.stringify({
-            command: "UNLOCK",
-            timestamp: new Date().toISOString(),
-            userId: req.user?.id
-        }));
+        publishToEsp("051_428_475/esp/door_control", "unlock");
 
         console.log("Unlock command sent to ESP32");
         
@@ -448,4 +505,4 @@ const getProfile = async (req, res) => {
   }
 };
 
-export { changeLockPassword, pushNotification, signup, signin, forgotPassword, resetPassword, getProfile, lockDoor, unlockDoor, getDoorStatus };
+export { changeLockPassword, pushNotification, sendDoorbellEmail, signup, signin, forgotPassword, resetPassword, getProfile, lockDoor, unlockDoor, getDoorStatus };

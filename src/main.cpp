@@ -61,8 +61,6 @@ bool doorbellButtonPressed = false;
 
 // Door lock status
 bool isDoorLockedRemotely = true;  // Track remote lock status
-unsigned long lastStatusSent = 0;
-const unsigned long STATUS_INTERVAL = 30000;  // Send status every 30 seconds
 
 // các biến quản lý chức năng đổi mật khẩu
 unsigned long keyPressStart = 0;
@@ -157,6 +155,12 @@ void callback(char* topic, byte* message, unsigned int length) {
     handleChangePWFromWeb(msg);
   }
 
+  // Handle door status request
+  if (String(topic) == (teamKey + "/esp/status_request").c_str()) {
+    Serial.println("Door status request received from backend");
+    sendDoorStatus(); // Send current door status back to backend
+  }
+
   // Handle door control commands
   if (String(topic) == (teamKey + "/esp/door_control").c_str()) {
     if (msg == "lock") {
@@ -172,10 +176,9 @@ void callback(char* topic, byte* message, unsigned int length) {
     } else if (msg == "unlock") {
       isDoorLockedRemotely = false;
       Serial.println("Door unlocked remotely");
-      sendDoorStatus();
       
-      // Optional: Add buzzer feedback for unlock
-      tone(buzzer, 1000, 500);
+      // Call the unlock function to physically unlock
+      unlockFromApp();
     }
   }
 }
@@ -394,12 +397,6 @@ void loop() {
     }
     delay(120);
   }
-
-  // Send periodic door status updates
-  if (millis() - lastStatusSent > STATUS_INTERVAL) {
-    sendDoorStatus();
-    lastStatusSent = millis();
-  }
 }
 
 void handleChangePw() {
@@ -532,10 +529,23 @@ void printAndOpenDoor(){
   lcd.setCursor(2,1);
   lcd.print("THANH CONG!");
   digitalWrite(greenLedAndRelay, HIGH);
+  
+  // Publish door unlock status to MQTT
+  if (mqttClient.connected()) {
+    String unlockMessage = "{\"status\":\"unlocked\",\"timestamp\":" + String(millis()) + ",\"method\":\"manual\"}";
+    mqttClient.publish((teamKey + "/esp/door_status").c_str(), unlockMessage.c_str());
+    Serial.println("Door unlock status sent: " + unlockMessage);
+  }
+  
   delay(3000);
   digitalWrite(greenLedAndRelay, LOW);
   wrongPw = 0;
   showHomeScreen();
+}
+
+void unlockFromApp(){
+  Serial.println("Starting remote unlock from app...");
+  printAndOpenDoor();
 }
 
 int getDistanceCm(){
@@ -643,7 +653,7 @@ void checkDoorbellButton() {
         
         // Publish MQTT message
         if (mqttClient.connected()) {
-          bool published = mqttClient.publish((teamKey + "esp/doorbell").c_str(), "TRIGGER");
+          bool published = mqttClient.publish((teamKey + "/esp/doorbell").c_str(), "TRIGGER");
           if (published) {
             Serial.println("Doorbell MQTT published: TRIGGER");
           } else {

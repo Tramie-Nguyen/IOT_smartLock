@@ -72,7 +72,7 @@ const Settings = () => {
     try {
       // Gọi API để đổi mật khẩu khóa
       const response = await axios.post(
-        "http://localhost:3000/api/change-lock-password",
+        "http://localhost:3000/api/change-password",
         {
           oldLockPassword: oldLockPassword,
           newLockPassword: lockPassword,

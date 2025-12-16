@@ -44,7 +44,7 @@ const authService = {
   // Sign up
   signup: async (userData) => {
     try {
-      const response = await api.post('/auth/signup', userData);
+      const response = await api.post('/signup', userData);
       
       if (response.data.success) {
         // Save token and user data
@@ -61,7 +61,7 @@ const authService = {
   // Sign in
   signin: async (credentials) => {
     try {
-      const response = await api.post('/auth/signin', credentials);
+      const response = await api.post('/signin', credentials);
       
       if (response.data.success) {
         // Save token and user data
@@ -78,7 +78,7 @@ const authService = {
   // Forgot password
   forgotPassword: async (email) => {
     try {
-      const response = await api.post('/auth/forgot-password', { email });
+      const response = await api.post('/forgot-password', { email });
       return response.data;
     } catch (error) {
       throw error.response?.data || { success: false, message: 'Network error' };
@@ -88,7 +88,7 @@ const authService = {
   // Reset password
   resetPassword: async (resetData) => {
     try {
-      const response = await api.post('/auth/reset-password', resetData);
+      const response = await api.post('/reset-password', resetData);
       
       if (response.data.success) {
         // Save token and user data
@@ -105,7 +105,7 @@ const authService = {
   // Get user profile
   getProfile: async () => {
     try {
-      const response = await api.get('/auth/profile');
+      const response = await api.get('/profile');
       return response.data;
     } catch (error) {
       throw error.response?.data || { success: false, message: 'Network error' };
@@ -132,7 +132,39 @@ const authService = {
   isAuthenticated: () => {
     const token = localStorage.getItem('authToken');
     return !!token;
-  }
+  },
+
+  // Lock door
+  lockDoor: async () => {
+    try {
+      const response = await api.post('/lock');
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { success: false, message: 'Network error' };
+    }
+  },
+
+  // Unlock door
+  unlockDoor: async () => {
+    try {
+      const response = await api.post('/unlock');
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { success: false, message: 'Network error' };
+    }
+  },
+
+  // Get door status
+  getDoorStatus: async () => {
+    try {
+      const response = await api.get('/door-status');
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { success: false, message: 'Network error' };
+    }
+  },
+
+  api: api
 };
 
 export default authService;

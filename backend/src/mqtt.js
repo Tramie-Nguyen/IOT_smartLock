@@ -1,6 +1,6 @@
 import { db, serverTime } from "./firebase.js";
 import mqtt from "mqtt";
-import { pushNotification } from "./controller.js";
+import { pushNotification, sendDoorbellEmail } from "./controller.js";
 
 const mqttUrl = "mqtt://broker.hivemq.com:1883";
 
@@ -36,7 +36,7 @@ const storeLog = async (type, message, topic, logDetails) => {
 };
 
 // Khi nhận dữ liệu từ ESP
-mqttClient.on("message", (topic, message) => {
+mqttClient.on("message", async (topic, message) => {
   const msg = message.toString();
   console.log("MQTT Message:", topic, msg);
 
@@ -86,23 +86,60 @@ mqttClient.on("message", (topic, message) => {
     // Parse door status and broadcast to frontend
     try {
       const statusData = JSON.parse(msg);
-      if (global.io) {
-        global.io.emit("door_status_update", statusData);
+      if (global.io) {        
+        // Emit door_action_complete for web interface actions
+        if (statusData.status) {
+          global.io.emit("door_action_complete", {
+            success: true,
+            action: statusData.status === "locked" ? "LOCK" : "UNLOCK",
+            timestamp: statusData.timestamp
+          });
+        }
+        
+        // Emit door_unlocked for manual unlocks (RFID/keypad)
+        if (statusData.status === "unlocked" && statusData.method === "manual") {
+          global.io.emit("door_unlocked", {
+            status: "unlocked",
+            timestamp: new Date().toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }),
+            method: statusData.method || "manual"
+          });
+        }
       }
     } catch (error) {
       console.error("Error parsing door status:", error);
     }
-  } else if (topic === "051_428_475/esp/door_action") {
-    console.log("Door action completed:", msg);
-    // Broadcast door action result to frontend
+  } else if (topic === "051_428_475/esp/doorbell") {
+    console.log("DOORBELL TOPIC RECEIVED!");
+    console.log("Topic:", topic);
+    console.log("Message:", msg);
+    
+    const timestamp = new Date().toLocaleString("vi-VN", {
+      timeZone: "Asia/Ho_Chi_Minh",
+    });
+    
+    logMessage = `Doorbell ringing at ${timestamp}.`;
+    logDetails = { action: "Alert", method: "Doorbell" };
+    
+    console.log("Guest at the door!");
+    console.log("Time:", timestamp);
+    console.log("Message:", msg);
+    
+    // Send push notification
+    console.log("Sending push notification...");
+    pushNotification(logMessage);
+    
+    // Send email notification
+    console.log(" Attempting to send doorbell email...");
     try {
-      const actionData = JSON.parse(msg);
-      if (global.io) {
-        global.io.emit("door_action_complete", actionData);
-      }
+      await sendDoorbellEmail(timestamp, msg);
+      console.log("Doorbell email process completed");
     } catch (error) {
-      console.error("Error parsing door action:", error);
+      console.error("Error in doorbell email process:", error);
     }
+    
+    // Store log
+    console.log("Storing doorbell log...");
+    storeLog("DOORBELL", logMessage, topic, logDetails);
   } else if (topic === "051_428_475/esp/wifi_connected") {
       console.log("WiFi connected:", msg);
 
@@ -152,19 +189,21 @@ mqttClient.on("connect", () => {
   mqttClient.subscribe("051_428_475/esp/loitering-detected", (err) => {
     if (!err) console.log("Subscribed: 051_428_475/esp/loitering-detected");
   });
+  
+  mqttClient.subscribe("051_428_475/esp/doorbell", (err) => {
+    if (!err) console.log("Subscribed: 051_428_475/esp/doorbell");
+  });
 
   mqttClient.subscribe("051_428_475/esp/wifi_connected", (err) => {
     if (!err) console.log("Subscribed: 051_428_475/esp/wifi_connected");
   });
 });
 
-// Subscribe to door status and action topics
-mqttClient.subscribe("051_428_475/esp/door_status", (err) => {
-  if (!err) console.log("Subscribed: 051_428_475/esp/door_status");
-});
+  // Subscribe to door status and action topics
+  mqttClient.subscribe("051_428_475/esp/door_status", (err) => {
+    if (!err) console.log("Subscribed: 051_428_475/esp/door_status");
+  });
 
-mqttClient.subscribe("051_428_475/esp/door_action", (err) => {
-  if (!err) console.log("Subscribed: 051_428_475/esp/door_action");
 });
 // hàm publish cho controller sử dụng
 export const publishToEsp = (topic, msg) => {

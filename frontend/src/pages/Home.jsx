@@ -32,42 +32,24 @@ const Home = () => {
     const currentUser = authService.getCurrentUser();
     setUser(currentUser);
 
-    // Listen for door status updates
-    socket.on("door_status_update", (data) => {
-      console.log("Door status update:", data);
-      setIsLocked(data.isLocked || data.status === "LOCKED");
-      setLastChanged(new Date().toLocaleString());
-    });
-
-    // Listen for door action completion
-    socket.on("door_action_complete", (data) => {
-      console.log("Door action complete:", data);
-      setIsLoading(false);
-
-      if (data.success) {
-        setIsLocked(data.action === "LOCK");
-        const newActivity = {
-          action: data.action === "LOCK" ? "Door Locked" : "Door Unlocked",
-          time: new Date().toLocaleString(),
-          type: data.action === "LOCK" ? "lock" : "unlock",
-        };
-        setRecentActivity((prev) => [newActivity, ...prev.slice(0, 3)]);
-        setLastChanged(newActivity.time);
-      }
-    });
-
-    // Get initial door status
+    // Get initial door status when component loads
     getDoorStatus();
-
-    return () => {
-      socket.off("door_status_update");
-      socket.off("door_action_complete")
-    };
   }, []);
+
+  // Send door status request every time the page loads/reloads
+  useEffect(() => {
+    const requestDoorStatus = async () => {
+      console.log("Requesting door status on page load...");
+      await getDoorStatus();
+    };
+    
+    requestDoorStatus();
+  }, []); // Run once when component mounts
 
   const getDoorStatus = async () => {
     try {
-      await authService.api.get("/door-status");
+      console.log("Sending door status request to backend...");
+      await authService.getDoorStatus();
     } catch (error) {
       console.error("Error getting door status:", error);
     }
@@ -171,10 +153,10 @@ const Home = () => {
   }, []);
 
   // Handle door unlock with auto-lock after 3 seconds
-  const handleDoorUnlock = (data) => {
+  const handleDoorUnlock = useCallback((data) => {
     setIsLocked(false);
     setLastAction("unlocked");
-    setLastChanged(data.timestamp);
+    setLastChanged(data.timestamp || new Date().toLocaleString());
 
     // Refresh data
     fetchLastChanged();
@@ -184,7 +166,7 @@ const Home = () => {
     setTimeout(() => {
       setIsLocked(true);
     }, 3000);
-  };
+  }, [fetchLastChanged, fetchRecentActivity]);
 
   // lấy trạng thái wifi từ mqtt message (topic wifi_connected và payload là tên mạng)
   const handleWifiStatus = useCallback((data) => {
@@ -200,7 +182,37 @@ const Home = () => {
     fetchLastChanged();
     fetchRecentActivity();
 
-    socket.on("051_428_475/esp/nfc-success", (data) => {
+    const newSocket = io("http://localhost:3000");
+    setSocket(newSocket);
+
+    // Listen for door action completion
+    newSocket.on("door_action_complete", (data) => {
+      console.log("Door action complete:", data);
+      setIsLoading(false);
+
+      if (data.success) {
+        setIsLocked(data.action === "LOCK");
+        const newActivity = {
+          action: data.action === "LOCK" ? "Door Locked" : "Door Unlocked",
+          time: new Date().toLocaleString(),
+          type: data.action === "LOCK" ? "lock" : "unlock",
+        };
+        setRecentActivity((prev) => [newActivity, ...prev.slice(0, 3)]);
+        setLastChanged(newActivity.time);
+        setLastAction(data.action === "LOCK" ? "locked" : "unlocked");
+        
+        // Auto-lock after 3 seconds if unlocked
+        if (data.action === "UNLOCK") {
+          setTimeout(() => {
+            setIsLocked(true);
+            setLastAction("locked");
+            console.log("Door auto-locked after 3 seconds");
+          }, 3000);
+        }
+      }
+    });
+
+    newSocket.on("051_428_475/esp/nfc-success", (data) => {
       console.log("NFC Success:", data);
       handleDoorUnlock(data);
     });
@@ -243,7 +255,7 @@ const Home = () => {
       socket.off("051_428_475/esp/loitering-detected");
       socket.off("051_428_475/esp/wifi_connected");
     };
-  }, [fetchLastChanged, fetchRecentActivity, handleWifiStatus]);
+  }, [fetchLastChanged, fetchRecentActivity, handleDoorUnlock, handleWifiStatus]);
 
   const handleLogout = () => {
     if (socket) {
@@ -259,23 +271,35 @@ const Home = () => {
     try {
       setIsLoading(true);
 
+      let response;
       if (isLocked) {
         // Unlock the door
-        const response = await authService.api.post("/unlock-door");
-        console.log("Unlock response:", response.data);
+        response = await authService.unlockDoor();
+        console.log("Unlock response:", response);
+        if (response.success) {
+          setIsLocked(false);
+          setLastAction("unlocked");
+          setLastChanged(new Date().toLocaleString());
+        }
       } else {
         // Lock the door
-        const response = await authService.api.post("/lock-door");
-        console.log("Lock response:", response.data);
+        response = await authService.lockDoor();
+        console.log("Lock response:", response);
+        if (response.success) {
+          setIsLocked(true);
+          setLastAction("locked");
+          setLastChanged(new Date().toLocaleString());
+        }
       }
     } catch (error) {
       console.error("Error toggling lock:", error);
-      setIsLoading(false);
-
+      
       // Show error message or handle error
-      if (error.response?.status === 401) {
+      if (error.status === 401) {
         navigate("/login");
       }
+    } finally {
+      setIsLoading(false);
     }
   };
 
