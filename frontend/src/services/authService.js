@@ -132,7 +132,40 @@ const authService = {
   isAuthenticated: () => {
     const token = localStorage.getItem('authToken');
     return !!token;
-  }
+  },
+
+  // Lock door
+  lockDoor: async () => {
+    try {
+      const response = await api.post('/lock');
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { success: false, message: 'Network error' };
+    }
+  },
+
+  // Unlock door
+  unlockDoor: async () => {
+    try {
+      const response = await api.post('/unlock');
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { success: false, message: 'Network error' };
+    }
+  },
+
+  // Get door status
+  getDoorStatus: async () => {
+    try {
+      const response = await api.get('/door-status');
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { success: false, message: 'Network error' };
+    }
+  },
+
+  // Export api instance for direct use if needed
+  api: api
 };
 
 export default authService;

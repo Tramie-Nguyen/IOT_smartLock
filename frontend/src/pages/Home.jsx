@@ -32,62 +32,8 @@ const Home = () => {
     const currentUser = authService.getCurrentUser();
     setUser(currentUser);
 
-    // Initialize WebSocket connection
-    const socket = io("http://localhost:3000");
-
-    // Listen for door status updates
-    socket.on("door_status_update", (data) => {
-      console.log("Door status update:", data);
-      setIsLocked(data.isLocked || data.status === "LOCKED");
-      setLastChanged(new Date().toLocaleString());
-    });
-
-    // Listen for door action completion
-    socket.on("door_action_complete", (data) => {
-      console.log("Door action complete:", data);
-      setIsLoading(false);
-
-      if (data.success) {
-        setIsLocked(data.action === "LOCK");
-        const newActivity = {
-          action: data.action === "LOCK" ? "Door Locked" : "Door Unlocked",
-          time: new Date().toLocaleString(),
-          type: data.action === "LOCK" ? "lock" : "unlock",
-        };
-        setRecentActivity((prev) => [newActivity, ...prev.slice(0, 3)]);
-        setLastChanged(newActivity.time);
-      }
-    });
-
-    // Listen for manual door unlock from ESP32
-    socket.on("door_unlocked", (data) => {
-      console.log("Door unlocked manually:", data);
-      setIsLocked(false);
-      setLastAction("unlocked");
-      setLastChanged(data.timestamp);
-      
-      // Add to activity log
-      const newActivity = {
-        action: `Door Unlocked (${data.method})`,
-        time: data.timestamp,
-        type: "unlock",
-      };
-      setRecentActivity((prev) => [newActivity, ...prev.slice(0, 3)]);
-      
-      // Auto-lock after 3 seconds
-      setTimeout(() => {
-        setIsLocked(true);
-        setLastAction("locked");
-        console.log("Door auto-locked after 3 seconds");
-      }, 3000);
-    });
-
     // Get initial door status when component loads
     getDoorStatus();
-
-    return () => {
-      socket.disconnect();
-    };
   }, []);
 
   // Send door status request every time the page loads/reloads
@@ -103,7 +49,7 @@ const Home = () => {
   const getDoorStatus = async () => {
     try {
       console.log("Sending door status request to backend...");
-      await authService.api.get("/door-status");
+      await authService.getDoorStatus();
     } catch (error) {
       console.error("Error getting door status:", error);
     }
@@ -207,10 +153,10 @@ const Home = () => {
   }, []);
 
   // Handle door unlock with auto-lock after 3 seconds
-  const handleDoorUnlock = (data) => {
+  const handleDoorUnlock = useCallback((data) => {
     setIsLocked(false);
     setLastAction("unlocked");
-    setLastChanged(data.timestamp);
+    setLastChanged(data.timestamp || new Date().toLocaleString());
 
     // Refresh data
     fetchLastChanged();
@@ -220,7 +166,7 @@ const Home = () => {
     setTimeout(() => {
       setIsLocked(true);
     }, 3000);
-  };
+  }, [fetchLastChanged, fetchRecentActivity]);
 
   // Connect to Socket.IO and listen for real-time updates
   useEffect(() => {
@@ -229,6 +175,53 @@ const Home = () => {
 
     const newSocket = io("http://localhost:3000");
     setSocket(newSocket);
+
+    // Listen for door status updates
+    newSocket.on("door_status_update", (data) => {
+      console.log("Door status update:", data);
+      setIsLocked(data.status === "locked");
+      setLastChanged(new Date().toLocaleString());
+    });
+
+    // Listen for door action completion
+    newSocket.on("door_action_complete", (data) => {
+      console.log("Door action complete:", data);
+      setIsLoading(false);
+
+      if (data.success) {
+        setIsLocked(data.action === "LOCK");
+        const newActivity = {
+          action: data.action === "LOCK" ? "Door Locked" : "Door Unlocked",
+          time: new Date().toLocaleString(),
+          type: data.action === "LOCK" ? "lock" : "unlock",
+        };
+        setRecentActivity((prev) => [newActivity, ...prev.slice(0, 3)]);
+        setLastChanged(newActivity.time);
+      }
+    });
+
+    // Listen for manual door unlock from ESP32
+    newSocket.on("door_unlocked", (data) => {
+      console.log("Door unlocked manually:", data);
+      setIsLocked(false);
+      setLastAction("unlocked");
+      setLastChanged(data.timestamp);
+      
+      // Add to activity log
+      const newActivity = {
+        action: `Door Unlocked (${data.method})`,
+        time: data.timestamp,
+        type: "unlock",
+      };
+      setRecentActivity((prev) => [newActivity, ...prev.slice(0, 3)]);
+      
+      // Auto-lock after 3 seconds
+      setTimeout(() => {
+        setIsLocked(true);
+        setLastAction("locked");
+        console.log("Door auto-locked after 3 seconds");
+      }, 3000);
+    });
 
     newSocket.on("051_428_475/esp/nfc-success", (data) => {
       console.log("NFC Success:", data);
@@ -261,7 +254,7 @@ const Home = () => {
     return () => {
       newSocket.disconnect();
     };
-  }, [fetchLastChanged, fetchRecentActivity]);
+  }, [fetchLastChanged, fetchRecentActivity, handleDoorUnlock]);
 
   const handleLogout = () => {
     if (socket) {
@@ -278,23 +271,35 @@ const Home = () => {
     try {
       setIsLoading(true);
 
+      let response;
       if (isLocked) {
         // Unlock the door
-        const response = await authService.api.post("/unlock");
-        console.log("Unlock response:", response.data);
+        response = await authService.unlockDoor();
+        console.log("Unlock response:", response);
+        if (response.success) {
+          setIsLocked(false);
+          setLastAction("unlocked");
+          setLastChanged(new Date().toLocaleString());
+        }
       } else {
         // Lock the door
-        const response = await authService.api.post("/lock");
-        console.log("Lock response:", response.data);
+        response = await authService.lockDoor();
+        console.log("Lock response:", response);
+        if (response.success) {
+          setIsLocked(true);
+          setLastAction("locked");
+          setLastChanged(new Date().toLocaleString());
+        }
       }
     } catch (error) {
       console.error("Error toggling lock:", error);
-      setIsLoading(false);
-
+      
       // Show error message or handle error
-      if (error.response?.status === 401) {
+      if (error.status === 401) {
         navigate("/login");
       }
+    } finally {
+      setIsLoading(false);
     }
   };
 

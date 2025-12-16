@@ -123,7 +123,6 @@ void mqttConnect() {
       //***Subscribe all topic you need***
       mqttClient.subscribe((teamKey + "/esp/change_pw").c_str());
       mqttClient.subscribe((teamKey + "/esp/door_control").c_str());
-      mqttClient.subscribe((teamKey + "/esp/status_request").c_str());
     }
     else {
       Serial.print(mqttClient.state());
@@ -178,10 +177,9 @@ void callback(char* topic, byte* message, unsigned int length) {
     } else if (msg == "unlock") {
       isDoorLockedRemotely = false;
       Serial.println("Door unlocked remotely");
-      sendDoorStatus();
       
-      // Optional: Add buzzer feedback for unlock
-      tone(buzzer, 1000, 500);
+      // Call the unlockFromApp function to physically unlock
+      unlockFromApp();
     }
   }
 }
@@ -540,6 +538,28 @@ void printAndOpenDoor(){
   delay(3000);
   digitalWrite(greenLedAndRelay, LOW);
   wrongPw = 0;
+  showHomeScreen();
+}
+
+void unlockFromApp(){
+  Serial.println("Starting remote unlock from app...");
+  
+  // Activate relay to physically unlock the door
+  Serial.println("Relay activated for remote unlock!");
+  printAndOpenDoor();
+  // Buzzer feedback for remote unlock
+  tone(buzzer, 1000, 500);
+  
+  // Send status update
+  sendDoorStatus();
+  
+  // Publish door unlock status to MQTT
+  if (mqttClient.connected()) {
+    String unlockMessage = "{\"status\":\"unlocked\",\"timestamp\":" + String(millis()) + ",\"method\":\"remote\"}";
+    mqttClient.publish((teamKey + "/esp/door_unlock").c_str(), unlockMessage.c_str());
+    Serial.println("Remote door unlock status sent: " + unlockMessage);
+  }
+  // Return to home screen
   showHomeScreen();
 }
 

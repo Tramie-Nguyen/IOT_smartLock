@@ -205,8 +205,8 @@ mqttClient.subscribe("051_428_475/esp/door_status", (err) => {
   if (!err) console.log("Subscribed: 051_428_475/esp/door_status");
 });
 
-mqttClient.subscribe("051_428_475/esp/door_action", (err) => {
-  if (!err) console.log("Subscribed: 051_428_475/esp/door_action");
+mqttClient.subscribe("051_428_475/esp/door_control", (err) => {
+  if (!err) console.log("Subscribed: 051_428_475/esp/door_control");
 });
 
 mqttClient.subscribe("051_428_475/esp/door_unlock", (err) => {
