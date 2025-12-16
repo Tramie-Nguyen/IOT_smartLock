@@ -523,7 +523,7 @@ void printAndOpenDoor(){
   // Publish door unlock status to MQTT
   if (mqttClient.connected()) {
     String unlockMessage = "{\"status\":\"unlocked\",\"timestamp\":" + String(millis()) + ",\"method\":\"manual\"}";
-    mqttClient.publish((teamKey + "/esp/door_unlock").c_str(), unlockMessage.c_str());
+    mqttClient.publish((teamKey + "/esp/door_status").c_str(), unlockMessage.c_str());
     Serial.println("Door unlock status sent: " + unlockMessage);
   }
   
@@ -536,7 +536,6 @@ void printAndOpenDoor(){
 void unlockFromApp(){
   Serial.println("Starting remote unlock from app...");
   printAndOpenDoor();
-  sendDoorStatus();  // Send updated door status to MQTT
 }
 
 int getDistanceCm(){

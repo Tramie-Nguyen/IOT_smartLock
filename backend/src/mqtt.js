@@ -28,7 +28,7 @@ const storeLog = async (type, message, topic, logDetails) => {
 };
 
 // Khi nhận dữ liệu từ ESP
-mqttClient.on("message", (topic, message) => {
+mqttClient.on("message", async (topic, message) => {
   const msg = message.toString();
   console.log("MQTT Message:", topic, msg);
 
@@ -102,38 +102,35 @@ mqttClient.on("message", (topic, message) => {
     try {
       const statusData = JSON.parse(msg);
       if (global.io) {
+        // Emit main door status update
         global.io.emit("door_status_update", statusData);
+        
+        // Emit door_action_complete for web interface actions
+        if (statusData.status) {
+          global.io.emit("door_action_complete", {
+            success: true,
+            action: statusData.status === "locked" ? "LOCK" : "UNLOCK",
+            timestamp: statusData.timestamp
+          });
+        }
+        
+        // Emit door_unlocked for manual unlocks (RFID/keypad)
+        if (statusData.status === "unlocked" && statusData.method === "manual") {
+          global.io.emit("door_unlocked", {
+            status: "unlocked",
+            timestamp: new Date().toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }),
+            method: statusData.method || "manual"
+          });
+        }
       }
     } catch (error) {
       console.error("Error parsing door status:", error);
     }
-  } else if (topic === "051_428_475/esp/door_action") {
-    console.log("Door action completed:", msg);
-    // Broadcast door action result to frontend
-    try {
-      const actionData = JSON.parse(msg);
-      if (global.io) {
-        global.io.emit("door_action_complete", actionData);
-      }
-    } catch (error) {
-      console.error("Error parsing door action:", error);
-    }
-  } else if (topic === "051_428_475/esp/door_unlock") {
-    console.log("Door unlocked manually:", msg);
-    // Broadcast door unlock to frontend
-    try {
-      const unlockData = JSON.parse(msg);
-      if (global.io) {
-        global.io.emit("door_unlocked", {
-          status: "unlocked",
-          timestamp: new Date().toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }),
-          method: unlockData.method || "manual"
-        });
-      }
-    } catch (error) {
-      console.error("Error parsing door unlock:", error);
-    }
   } else if (topic === "051_428_475/esp/doorbell") {
+    console.log("🔔 DOORBELL TOPIC RECEIVED!");
+    console.log("Topic:", topic);
+    console.log("Message:", msg);
+    
     const timestamp = new Date().toLocaleString("vi-VN", {
       timeZone: "Asia/Ho_Chi_Minh",
     });
@@ -146,12 +143,20 @@ mqttClient.on("message", (topic, message) => {
     console.log("Message:", msg);
     
     // Send push notification
+    console.log("Sending push notification...");
     pushNotification(logMessage);
     
     // Send email notification
-    sendDoorbellEmail(timestamp, msg);
+    console.log(" Attempting to send doorbell email...");
+    try {
+      await sendDoorbellEmail(timestamp, msg);
+      console.log("Doorbell email process completed");
+    } catch (error) {
+      console.error("Error in doorbell email process:", error);
+    }
     
     // Store log
+    console.log("Storing doorbell log...");
     storeLog("DOORBELL", logMessage, topic, logDetails);
   }
 
@@ -198,19 +203,12 @@ mqttClient.on("connect", () => {
   mqttClient.subscribe("051_428_475/esp/doorbell", (err) => {
     if (!err) console.log("Subscribed: 051_428_475/esp/doorbell");
   });
-});
 
-// Subscribe to door status and action topics
-mqttClient.subscribe("051_428_475/esp/door_status", (err) => {
-  if (!err) console.log("Subscribed: 051_428_475/esp/door_status");
-});
+  // Subscribe to door status and action topics
+  mqttClient.subscribe("051_428_475/esp/door_status", (err) => {
+    if (!err) console.log("Subscribed: 051_428_475/esp/door_status");
+  });
 
-mqttClient.subscribe("051_428_475/esp/door_control", (err) => {
-  if (!err) console.log("Subscribed: 051_428_475/esp/door_control");
-});
-
-mqttClient.subscribe("051_428_475/esp/door_unlock", (err) => {
-  if (!err) console.log("Subscribed: 051_428_475/esp/door_unlock");
 });
 // hàm publish cho controller sử dụng
 export const publishToEsp = (topic, msg) => {

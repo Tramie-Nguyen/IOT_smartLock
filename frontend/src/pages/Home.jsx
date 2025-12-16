@@ -176,12 +176,12 @@ const Home = () => {
     const newSocket = io("http://localhost:3000");
     setSocket(newSocket);
 
-    // Listen for door status updates
-    newSocket.on("door_status_update", (data) => {
-      console.log("Door status update:", data);
-      setIsLocked(data.status === "locked");
-      setLastChanged(new Date().toLocaleString());
-    });
+    // // Listen for door status updates
+    // newSocket.on("door_status_update", (data) => {
+    //   console.log("Door status update:", data);
+    //   setIsLocked(data.status === "locked");
+    //   setLastChanged(new Date().toLocaleString());
+    // });
 
     // Listen for door action completion
     newSocket.on("door_action_complete", (data) => {

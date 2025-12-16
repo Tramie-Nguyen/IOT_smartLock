@@ -164,7 +164,6 @@ const authService = {
     }
   },
 
-  // Export api instance for direct use if needed
   api: api
 };
 
